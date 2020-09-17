@@ -1,0 +1,12 @@
+{
+    "details": {
+        "description": "Allows creating new generators in your local project"
+    },
+    "engine": "copy",
+    "commands": {
+        "index": {
+            "schema": "index.schema.json",
+            "js": "index.js"
+        }
+    }
+}

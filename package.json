@@ -1,0 +1,8 @@
+{
+  "name": "polygen",
+  "version": "0.0.0",
+  "description": "Polyglot Code Generator",
+  "main": "index.js",
+  "author": "Iskander Sierra <iskander.sierra@gmail.com> (https://iskandersierra@github.com/)",
+  "license": "MIT"
+}

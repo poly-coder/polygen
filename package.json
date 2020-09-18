@@ -1,5 +1,5 @@
 {
-  "name": "polygen",
+  "name": "@poly-coder/polygen",
   "version": "0.0.0",
   "description": "Polyglot Code Generator",
   "main": "index.js",

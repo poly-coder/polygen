@@ -1,12 +1,19 @@
 {
     "details": {
+        "author": "Iskander Sierra",
+        "version": "1",
         "description": "Allows creating new generators in your local project"
     },
-    "engine": "copy",
-    "commands": {
-        "index": {
-            "schema": "index.schema.json",
-            "js": "index.js"
+    "engine": "ejs",
+    "outDir" : "%POLYGEN_FOLDER%",
+    "commands": [
+        {
+            "name": "new",
+            "js": "new.js",
+            "details": {
+                "version": "1",
+                "description": "Default command to generate the entire project"
+            }
         }
-    }
+    ]
 }

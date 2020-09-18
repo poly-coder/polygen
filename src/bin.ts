@@ -8,6 +8,7 @@ import { logLevelOption } from "./logging";
 const mainProgram = new Command();
 
 mainProgram
+    .storeOptionsAsProperties(false)
     .version('0.0.0')
     .name('polygen')
     .description('Polyglot code generator, based on models and templates you can own')

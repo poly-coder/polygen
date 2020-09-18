@@ -18,6 +18,8 @@ export function infoCommand(command: commander.Command) {
         // .requiredOption('-p, --project <value>', 'Generator name. Must be compatible with the file system.')
         .requiredOption('-d, --details', 'Show generator details', true)
         .requiredOption('--no-details', 'Hide generator details')
+        .requiredOption('-c, --commands', 'Show generator commands', true)
+        .requiredOption('--no-commands', 'Hide generator commands')
         .action((project: string, args) => executeListCommand({
             ...getOptions(args),
             project,
@@ -27,8 +29,6 @@ export function infoCommand(command: commander.Command) {
 async function executeListCommand(opts: InfoCommandOptions) {
     const console = getConsola(opts);
     const templates = createTemplateSystem(console);
-
-    console.log('opts', opts)
 
     if (!(await templates.ensureInitialized())) {
         return;
@@ -43,12 +43,20 @@ async function executeListCommand(opts: InfoCommandOptions) {
     }
 }
 
-function printField(key: string, value: any) {
+function printField(key: string, value: any, indent: string = '') {
     if ((key + value).length > 40) {
-        console.log(`  ${chalk.white(key)}`)
-        console.log(`    ${chalk.gray(value)}`)
+        console.log(`${indent}    ${chalk.white(key)}:`)
+        console.log(`${indent}        ${chalk.gray(value)}`)
     } else {
-        console.log(`  ${chalk.white(key)}: ${chalk.gray(value)}`)
+        console.log(`${indent}    ${chalk.white(key)}: ${chalk.gray(value)}`)
+    }
+}
+
+function printDetails(details?: any, indent: string = '') {
+    if (details) {
+        for (const [key, value] of Object.entries(details)) {
+            printField(capitalCase(key), value, indent);
+        }
     }
 }
 
@@ -59,9 +67,18 @@ export function printTemplateInfo(info: TemplateInfo, console: Consola) {
         printField('Engine', info.engine);
     }
     
-    if (info.details) {
-        for (const [key, value] of Object.entries(info.details)) {
-            printField(capitalCase(key), value);
+    printDetails(info.details)
+
+    if (info.commands) {
+        if (info.commands.length > 0) {
+            printField('Commands', '')
+            for (const command of info.commands) {
+                console.log(`    > ${chalk.cyanBright(command.name)}`)
+                printField('Code File', command.js, '    ');
+                printDetails(command.details, '    ')
+            }
+        } else {
+            printField('Commands', 'none')
         }
     }
 }

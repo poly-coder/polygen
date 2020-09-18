@@ -13,6 +13,7 @@ export function listCommand(command: commander.Command) {
         .alias('ls')
         .description("List existing generators and commands")
         .requiredOption('-d, --details', 'Show generator details', false)
+        .requiredOption('-c, --commands', 'Show generator commands', false)
         .action(args => executeListCommand(getOptions(args)))
     }
     

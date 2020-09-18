@@ -1,8 +1,8 @@
 export default function(model) {
-    return 
-    {
-        files: [
+    return {
+        steps: [
             {
+                type: "template",
                 to: "hello-world.txt",
                 from: "hello-world.txt",
                 engine: "ejs"

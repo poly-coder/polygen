@@ -2,7 +2,7 @@ import path from 'path';
 import fs from 'fs-extra';
 import { Consola } from 'consola';
 import chalk from 'chalk';
-import { fsExistsAsDirectory, fsReadFileContent } from './file-utils';
+import { fsExistsAsDirectory, fsExistsAsFile, fsReadFileContent } from './file-utils';
 
 type Mutable<T> = {
     -readonly[P in keyof T]: T[P]
@@ -22,39 +22,118 @@ export interface ITemplateSystem {
 
 export interface FetchTemplateInfoOptions {
     readonly details: boolean;
+    readonly commands: boolean;
 }
 
 export type GeneratorEngine = "ejs" | "handlebars" | "liquid" | "mustache" | "nunjucks" | "pug" | "copy";
-export type DefaultGeneratorEngine = GeneratorEngine | "default";
+
+export interface TemplateCommandStep {
+    readonly type: "template";
+    readonly to: string;
+    readonly from: string;
+    readonly engine?: GeneratorEngine;
+}
+
+export type CommandStep = TemplateCommandStep;
+
+export interface RunCommandResult {
+    readonly steps: ReadonlyArray<CommandStep>;
+}
+
+export interface RunCommandContext {
+    readonly model: any;
+    readonly console: Consola;
+    readonly templates: ITemplateSystem;
+}
+
+export type RunCommandFunc = (model: any, context: RunCommandContext) => Promise<RunCommandResult | null>;
+
+export interface CommandDescriptor {
+    readonly name: string;
+    readonly js: string;
+    readonly details?: any;
+
+    runCommand: RunCommandFunc;
+}
 
 export interface GeneratorProjectDescriptor {
     readonly details?: any;
-    readonly engine?: DefaultGeneratorEngine;
+    readonly outDir?: string;
+    readonly engine?: GeneratorEngine;
+    readonly commands: ReadonlyArray<CommandDescriptor>;
 }
 
 export interface TemplateInfo {
     readonly name: string;
     readonly details?: any;
     readonly engine?: any;
+    readonly commands?: ReadonlyArray<CommandDescriptor>;
     
     readonly projectInfo?: GeneratorProjectDescriptor;
 }
 
 export function createTemplateSystem(console: Consola): ITemplateSystem {
-    // TODO: Define POLYGEN_TEMPLATES env var
+    // TODO: Define POLYGEN_PROJECTS env var
     // TODO: Define polygen.json for configuration
     // TODO: Look for parent folders when not found?
-
-    const templatesFolder = '_templates'
+    
+    const polygenFolder = '_polygen'
     const generatorFolder = 'generator'
-    const templatesBasePath = path.join(process.cwd(), templatesFolder)
-    // const defaultCommand = 'index'
+    const commandsSubFolder = 'commands'
+    const templatesSubFolder = 'templates'
+    
+    const fullPath = (relativePath: string) => path.join(process.cwd(), relativePath)
+    const projectFullPath = (project: string) => fullPath(path.join(polygenFolder, project))
+    const itemFullPath = (project: string, relativePath: string) => fullPath(path.join(polygenFolder, project, relativePath))
+    
+    const polygenBasePath = fullPath(polygenFolder)
+    // const defaultCommand = 'new'
     const generatorAssets = path.join(__dirname, '../assets/generator') 
 
-    const projectFolder = (name: string) => path.join(templatesFolder, name)
-    const projectItemPath = (project: string, relativePath: string) => path.join(templatesFolder, project, relativePath)
+    // const projectCommandPath = (project: string, commandName: string) => path.join(projectFolder(project), commandsSubFolder, `${commandName}.js`)
+    // const projectTemplatePath = (project: string, templateName: string) => path.join(projectFolder(project), templatesSubFolder, templateName)
 
-    const isInitialized = () => fsExistsAsDirectory(templatesBasePath)
+    const globalVariables: Record<string, string> = {
+        'CWD': process.cwd(),                       // Current Working Directory
+        'PWD': process.cwd(),                       // Process Working Directory, same as CWD
+        
+        'POLYGEN_FOLDER': polygenFolder,            // _polygen
+        'GENERATORS_FOLDER': generatorFolder,       // generators
+        'COMMANDS_FOLDER': commandsSubFolder,       // commands
+        'TEMPLATES_FOLDER': templatesSubFolder,     // templates
+
+        'POLYGEN_PATH': polygenFolder,                  // _polygen
+        'POLYGEN_FULLPATH': fullPath(polygenFolder),    // %CWD%/_polygen
+
+        'GENERATORS_PATH': path.join(polygenFolder, generatorFolder),   // _polygen/generators
+        'GENERATORS_FULLPATH': projectFullPath(generatorFolder),          // %CWD%/_polygen/generators
+    }
+
+    const getLocalVariables = (projectName: string): Record<string, string> => {
+        const commandsPath = path.join(polygenFolder, projectName, commandsSubFolder)
+        const templatesPath = path.join(polygenFolder, projectName, templatesSubFolder)
+
+        return {
+            'PROJECT_NAME': projectName,
+            
+            'COMMANDS_PATH': commandsPath,                  // _polygen/%PROJECT_NAME%/commands
+            'COMMANDS_FULLPATH': fullPath(commandsPath),    // %CWD%/_polygen/commands
+            
+            'TEMPLATES_PATH': templatesPath,                // _polygen/templates
+            'TEMPLATES_FULLPATH': fullPath(templatesPath),  // %CWD%/_polygen/templates
+        }
+    }
+
+    const replaceVariables = (projectName: string, text: string): string => {
+        return text.replace(/%([A-Za-z_][A-Za-z_0-9]*)%/, (substring: string, varName: string): string => {
+            return globalVariables[varName] ??
+                getLocalVariables(projectName)[varName] ??
+                process.env[varName] ??
+                substring
+        })
+    }
+
+    const isInitialized = () => fsExistsAsDirectory(polygenBasePath)
 
     const ensureInitialized = async () => {
         if (!(await isInitialized())) {
@@ -67,32 +146,72 @@ export function createTemplateSystem(console: Consola): ITemplateSystem {
     const initialize = async () => {
         if (!(await isInitialized())) {
             console.trace('Initializing polygen ...')
-            fs.copy(generatorAssets, projectFolder(generatorFolder))
+            fs.copy(generatorAssets, projectFullPath(generatorFolder))
         }
     }
 
-    const ensureProjectDesc = async (name: string, projDesc: GeneratorProjectDescriptor | undefined): Promise<GeneratorProjectDescriptor> => {
+    const ensureProjectDesc = async (projectName: string, projDesc: GeneratorProjectDescriptor | undefined): Promise<GeneratorProjectDescriptor> => {
         if (projDesc) {
             return projDesc;
         }
 
-        const jsonPath = projectItemPath(name, `${name}.json`)
+        const jsonPath = itemFullPath(projectName, `${projectName}.json`)
         const jsonContent = await fsReadFileContent(jsonPath)
         if (jsonContent) {
             try {
-                projDesc = JSON.parse(jsonContent) as GeneratorProjectDescriptor;
+                projDesc = JSON.parse(replaceVariables(projectName, jsonContent)) as GeneratorProjectDescriptor;
                 console.trace('Read project descriptor from ', jsonPath)
-                console.trace('project descriptor ', projDesc)
                 return projDesc;
             } catch (error) {
+                console.trace('Error reading project descriptor from ', jsonPath)
+            }
+        } else {
+            console.trace('Project descriptor not found at ', jsonPath)
+        }
+
+        // Search commands in commands folder
+        const commands: CommandDescriptor[] = [];
+
+        const fileNames = await fs.readdir(itemFullPath(projectName, commandsSubFolder))
+
+        for (const fileName of fileNames) {
+            if (await fsExistsAsFile(fileName)) {
+                const jsFileName = `${fileName}.js`;
+
+                const runCommand = async (model: any, context: RunCommandContext) => {
+                    const cmdModule = await import(path.join(`./${polygenFolder}`, projectName, commandsSubFolder, jsFileName))
+
+                    console.trace('Loaded module: ', cmdModule);
+                    
+                    if (typeof cmdModule == 'function') {
+                        const result: RunCommandResult = await cmdModule(model, context)
+
+                        // TODO: Validate result
+                        
+                        return result
+                    }
+                    
+                    console.trace('Loaded module: ', cmdModule);
+                    return null;
+                }
+
+                const cmd: CommandDescriptor = {
+                    name: fileName,
+                    js: `${fileName}.js`,
+                    runCommand,
+                }
+    
+                commands.push(cmd);
             }
         }
 
-        return {}
+        return {
+            commands,
+        }
     }
 
     const fetchTemplateInfo = async (name: string, options: FetchTemplateInfoOptions) => {
-        const folder = projectFolder(name)
+        const folder = projectFullPath(name)
         const info: Mutable<TemplateInfo> = {
             name,
         }
@@ -105,6 +224,11 @@ export function createTemplateSystem(console: Consola): ITemplateSystem {
                 info.details = projDesc?.details
             }
 
+            if (options.commands) {
+                projDesc = await ensureProjectDesc(name, projDesc)
+                info.commands = projDesc?.commands
+            }
+
             return info as TemplateInfo;
         }
         
@@ -112,10 +236,10 @@ export function createTemplateSystem(console: Consola): ITemplateSystem {
     }
 
     const fetchTemplatesInfo = async (options: FetchTemplateInfoOptions) => {
-        const files = await fs.readdir(templatesBasePath)
+        const files = await fs.readdir(polygenBasePath)
         const infos: TemplateInfo[] = []
         
-        console.trace(`Searching generator projects at ${templatesBasePath}`)
+        console.trace(`Searching generator projects at ${polygenBasePath}`)
         for (const name of files) {
             const info = await fetchTemplateInfo(name, options)
             if (!!info) {
@@ -130,12 +254,12 @@ export function createTemplateSystem(console: Consola): ITemplateSystem {
         return infos;
     }
 
-    const getProjectPath = (name: string) => projectFolder(name);
+    const getProjectPath = (name: string) => projectFullPath(name);
 
     const existsProject = (name: string) => fsExistsAsDirectory(getProjectPath(name))
 
     const createProject = async (name: string) => {
-        console.trace(`createProject: ensureDir "${templatesFolder}/${name}"`)
+        console.trace(`createProject: ensureDir "${polygenFolder}/${name}"`)
         await fs.ensureDir(getProjectPath(name))
     };
 

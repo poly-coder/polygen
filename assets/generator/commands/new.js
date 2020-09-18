@@ -1,12 +1,14 @@
-export default function(model) {
-    return {
-        steps: [
-            {
-                type: "template",
-                to: "hello-world.txt",
-                from: "hello-world.txt",
-                engine: "ejs"
-            }
-        ]
+module.exports = {
+    run: function run({module}) {
+        return {
+            steps: [
+                {
+                    type: "template",
+                    to: "hello-world.txt",
+                    from: "hello-world.txt",
+                    engine: "ejs"
+                }
+            ]
+        }
     }
 }

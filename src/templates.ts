@@ -66,6 +66,7 @@ export interface GeneratorProjectDescriptor {
 export interface TemplateInfo {
     readonly name: string;
     readonly details?: any;
+    readonly outDir?: string;
     readonly engine?: any;
     readonly commands?: ReadonlyArray<CommandDescriptor>;
     
@@ -221,6 +222,7 @@ export function createTemplateSystem(console: Consola): ITemplateSystem {
             if (options.details) {
                 projDesc = await ensureProjectDesc(name, projDesc)
                 info.engine = projDesc?.engine
+                info.outDir = projDesc?.outDir
                 info.details = projDesc?.details
             }
 

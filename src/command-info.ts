@@ -44,6 +44,9 @@ async function executeListCommand(opts: InfoCommandOptions) {
 }
 
 function printField(key: string, value: any, indent: string = '') {
+    if (value == null || value == undefined) {
+        return
+    }
     if ((key + value).length > 40) {
         console.log(`${indent}    ${chalk.white(key)}:`)
         console.log(`${indent}        ${chalk.gray(value)}`)
@@ -63,10 +66,8 @@ function printDetails(details?: any, indent: string = '') {
 export function printTemplateInfo(info: TemplateInfo, console: Consola) {
     console.log(`- ${chalk.greenBright(info.name)}`)
     
-    if (info.engine) {
-        printField('Engine', info.engine);
-    }
-    
+    printField('Engine', info.engine);
+    printField('Output Directory', info.outDir);
     printDetails(info.details)
 
     if (info.commands) {

@@ -1,10 +1,10 @@
 import commander from "commander";
 import { printTemplateInfo } from "./command-info";
-import { getOptions, PolyGenProgramOptions } from "./common";
+import { getOptions, PCGenProgramOptions } from "./common";
 import { getConsola } from "./logging";
 import { createTemplateSystem, FetchTemplateInfoOptions } from "./templates";
 
-export interface ListCommandOptions extends PolyGenProgramOptions, FetchTemplateInfoOptions {
+export interface ListCommandOptions extends PCGenProgramOptions, FetchTemplateInfoOptions {
 }
 
 export function listCommand(command: commander.Command) {
@@ -12,8 +12,8 @@ export function listCommand(command: commander.Command) {
         .command("list")
         .alias('ls')
         .description("List existing generators and commands")
-        .requiredOption('-d, --details', 'Show generator details', false)
-        .requiredOption('-c, --commands', 'Show generator commands', false)
+        .option('-d, --details', 'Show generator details', false)
+        .option('-c, --commands', 'Show generator commands', false)
         .action(args => executeListCommand(getOptions(args)))
     }
     

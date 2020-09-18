@@ -5,7 +5,7 @@
         "description": "Allows creating new generators in your local project"
     },
     "engine": "ejs",
-    "outDir" : "%POLYGEN_FOLDER%",
+    "outDir" : "%PCGEN_FOLDER%",
     "commands": [
         {
             "name": "new",

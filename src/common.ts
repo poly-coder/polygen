@@ -1,11 +1,11 @@
 import { LogLevel } from "consola";
 
-export interface PolyGenProgramOptions {
+export interface PCGenProgramOptions {
     readonly version: string;
     readonly logLevel: LogLevel;
 }
 
-export function getOptions<T extends PolyGenProgramOptions>(args: any): T {
+export function getOptions<T extends PCGenProgramOptions>(args: any): T {
     const parentOpts = args.parent ? getOptions(args.parent) : {};
 
     return {

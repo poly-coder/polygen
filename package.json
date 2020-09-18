@@ -1,12 +1,12 @@
 {
-  "name": "@poly-coder/polygen",
+  "name": "pcgen",
   "version": "0.0.0",
   "description": "Polyglot Code Generator",
   "main": "index.js",
   "author": "Iskander Sierra <iskander.sierra@gmail.com> (https://iskandersierra@github.com/)",
   "license": "MIT",
   "bin": {
-    "polygen": "./dist/bin.js"
+    "pcgen": "./dist/bin.js"
   },
   "scripts": {},
   "dependencies": {

@@ -1,6 +1,6 @@
 import consola, { LogLevel } from "consola";
 import commander from "commander";
-import { PolyGenProgramOptions } from "./common";
+import { PCGenProgramOptions } from "./common";
 
 export function logLevelOption(command: commander.Command) {
     command
@@ -58,7 +58,7 @@ function parseLogLevel(value: string) {
     return LogLevel.Info;
 }
 
-export function getConsola(opts: PolyGenProgramOptions) {
+export function getConsola(opts: PCGenProgramOptions) {
     return consola.create({
         level: opts.logLevel,
     })

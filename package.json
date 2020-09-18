@@ -8,7 +8,9 @@
   "bin": {
     "pcgen": "./dist/bin.js"
   },
-  "scripts": {},
+  "scripts": {
+    "dev:watch": "tsc --watch"
+  },
   "dependencies": {
     "chalk": "^4.1.0",
     "change-case": "^4.1.1",

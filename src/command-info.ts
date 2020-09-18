@@ -4,9 +4,9 @@ import { capitalCase } from "change-case";
 import { Consola } from "consola";
 import { getOptions, PCGenProgramOptions } from "./common";
 import { getConsola } from "./logging";
-import { createTemplateSystem, FetchTemplateInfoOptions, TemplateInfo } from "./templates";
+import { createGeneratorsSystem, FetchGeneratorInfoOptions, GeneratorInfo } from "./gen-system";
 
-export interface InfoCommandOptions extends PCGenProgramOptions, FetchTemplateInfoOptions {
+export interface InfoCommandOptions extends PCGenProgramOptions, FetchGeneratorInfoOptions {
     readonly project: string;
 }
 
@@ -27,16 +27,16 @@ export function infoCommand(command: commander.Command) {
     
 async function executeListCommand(opts: InfoCommandOptions) {
     const console = getConsola(opts);
-    const templates = createTemplateSystem(console);
+    const genSystem = createGeneratorsSystem(console);
 
-    if (!(await templates.ensureInitialized())) {
+    if (!(await genSystem.ensureInitialized())) {
         return;
     }
 
-    var info = await templates.fetchTemplateInfo(opts.project, opts)
+    var info = await genSystem.fetchGeneratorInfo(opts.project, opts)
     
     if (info) {
-        printTemplateInfo(info, console)
+        printGeneratorInfo(info, console)
     } else {
         console.warn(`Generator project "${opts.project}" does not exists`)
     }
@@ -62,7 +62,7 @@ function printDetails(details?: any, indent: string = '') {
     }
 }
 
-export function printTemplateInfo(info: TemplateInfo, console: Consola) {
+export function printGeneratorInfo(info: GeneratorInfo, console: Consola) {
     console.log(`- ${chalk.greenBright(info.name)}`)
     
     printField('Engine', info.engine);

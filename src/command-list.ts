@@ -1,10 +1,10 @@
 import commander from "commander";
-import { printTemplateInfo } from "./command-info";
+import { printGeneratorInfo } from "./command-info";
 import { getOptions, PCGenProgramOptions } from "./common";
 import { getConsola } from "./logging";
-import { createTemplateSystem, FetchTemplateInfoOptions } from "./templates";
+import { createGeneratorsSystem, FetchGeneratorInfoOptions } from "./gen-system";
 
-export interface ListCommandOptions extends PCGenProgramOptions, FetchTemplateInfoOptions {
+export interface ListCommandOptions extends PCGenProgramOptions, FetchGeneratorInfoOptions {
 }
 
 export function listCommand(command: commander.Command) {
@@ -19,15 +19,15 @@ export function listCommand(command: commander.Command) {
     
 async function executeListCommand(opts: ListCommandOptions) {
     const console = getConsola(opts);
-    const templates = createTemplateSystem(console);
+    const genSystem = createGeneratorsSystem(console);
 
-    if (!(await templates.ensureInitialized())) {
+    if (!(await genSystem.ensureInitialized())) {
         return;
     }
 
-    var infos = await templates.fetchTemplatesInfo(opts)
+    var infos = await genSystem.fetchGeneratorsInfo(opts)
 
     for (const info of infos) {
-        printTemplateInfo(info, console)
+        printGeneratorInfo(info, console)
     }
 }

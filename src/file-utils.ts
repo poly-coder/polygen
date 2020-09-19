@@ -1,34 +1,81 @@
+import pathModule from 'path';
 import fs from 'fs-extra';
 
-export async function fsStatsOrNull(path: string): Promise<fs.Stats | null> {
-    try {
-        const stats = await fs.stat(path)
-        return stats;
-    } catch (error) {
-        if (error?.code == 'ENOENT') {
-            return null;
-        } else {
-            throw error;
-        }
+export function joinPaths(...paths: string[]): string {
+  for (let index = paths.length - 1; index > 0; index--) {
+    const element = paths[index];
+    if (pathModule.isAbsolute(element)) {
+      return joinPaths(...paths.slice(index))
     }
+  }
+  return pathModule.join(...paths)
+}
+
+export async function fsStatsOrNull(path: string): Promise<fs.Stats | null> {
+  try {
+    const stats = await fs.stat(path);
+    return stats;
+  } catch (error) {
+    if (error?.code == 'ENOENT') {
+      return null;
+    } else {
+      throw error;
+    }
+  }
 }
 
 export async function fsExistsAsFile(path: string): Promise<boolean> {
-    return (await fsStatsOrNull(path))?.isFile() ?? false;
+  return (await fsStatsOrNull(path))?.isFile() ?? false;
 }
 
 export async function fsExistsAsDirectory(path: string): Promise<boolean> {
-    return (await fsStatsOrNull(path))?.isDirectory() ?? false;
+  return (await fsStatsOrNull(path))?.isDirectory() ?? false;
 }
 
 export async function fsReadFileContent(path: string): Promise<string | null> {
-    try {
-        return await fs.readFile(path, "utf-8")
-    } catch (error) {
-        if (error?.code == 'ENOENT') {
-            return null;
-        } else {
-            throw error;
-        }
+  try {
+    return await fs.readFile(path, 'utf-8');
+  } catch (error) {
+    if (error?.code == 'ENOENT') {
+      return null;
+    } else {
+      throw error;
     }
+  }
+}
+
+export async function fsWriteFileContent(
+  path: string,
+  text: string
+): Promise<void> {
+  return await fs.writeFile(path, text, 'utf-8');
+}
+
+export async function fsReadDir(
+  path: string,
+  predicate: (fileName: string) => Promise<boolean>
+): Promise<string[]> {
+  try {
+    const result: string[] = [];
+    const allFiles = await fs.readdir(path);
+    for (const file of allFiles) {
+      if (await predicate(file)) {
+        result.push(file);
+      }
+    }
+    return result;
+  } catch (error) {
+    console.dir(error);
+    throw error;
+  }
+}
+
+export function fsListFiles(path: string): Promise<string[]> {
+  return fsReadDir(path, (file) => fsExistsAsFile(pathModule.join(path, file)));
+}
+
+export function fsListDirectories(path: string): Promise<string[]> {
+  return fsReadDir(path, (file) =>
+    fsExistsAsDirectory(pathModule.join(path, file))
+  );
 }

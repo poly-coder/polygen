@@ -1,355 +1,418 @@
-import path from 'path';
 import fs from 'fs-extra';
 import { Consola } from 'consola';
 import chalk from 'chalk';
-import { fsExistsAsDirectory, fsExistsAsFile, fsReadFileContent } from './file-utils';
+import * as changeCase from 'change-case';
+import * as inflection from 'inflection';
+import * as humanize from 'humanize-plus';
+import {
+  fsExistsAsDirectory,
+  fsExistsAsFile,
+  fsListDirectories,
+  fsReadFileContent,
+  fsWriteFileContent,
+  joinPaths,
+} from './file-utils';
+import {
+  CommandDescriptor,
+  GeneratorDescriptor,
+  GeneratorDescriptorData,
+  GeneratorSystemConfig,
+  IGeneratorsSystem,
+  InitializeOptions,
+  ListGeneratorsOptions,
+  Mutable,
+  Variables,
+} from './gen-types';
+import {
+  createConfigHelpers,
+  createGeneratorSystemConfig,
+  extractVariables,
+  pcgenConfigFileNames,
+  replaceVariables,
+} from './gen-configuration';
+import { tracedError } from './utils';
+import { findGeneratorEngine } from './generator-engines';
 
-type Mutable<T> = {
-    -readonly[P in keyof T]: T[P]
-};
+export function createGeneratorsSystem(
+  config: GeneratorSystemConfig,
+  console: Consola
+): IGeneratorsSystem {
+  // TODO: Define PCGEN_GENERATORS_HOME env var. Multiple sources?
+  // TODO: Look for parent folders when not found?
 
-export interface IGeneratorsSystem {
-    readonly isInitialized: () => Promise<boolean>;
-    readonly ensureInitialized: () => Promise<boolean>;
-    readonly initialize: () => Promise<void>;
+  const helpers = {
+    config: createConfigHelpers(config),
+    env: process.env,
+    case: changeCase,
+    inflection,
+    humanize,
+    console,
+  };
 
-    readonly fetchGeneratorInfo: (name: string, options: FetchGeneratorInfoOptions) => Promise<GeneratorInfo | null>;
-    readonly fetchGeneratorsInfo: (options: FetchGeneratorInfoOptions) => Promise<GeneratorInfo[]>;
+  console.trace('config', config);
+  console.trace('helpers.config', helpers.config);
+  // console.trace('helpers', helpers);
 
-    readonly runGenerator: (opts: RunGeneratorOptions) => Promise<void>;
-}
+  const variables = extractVariables(helpers);
+  console.trace('variables', variables);
 
-export interface FetchGeneratorInfoOptions {
-    readonly details: boolean;
-    readonly commands: boolean;
-}
+  const isInitialized = async () => {
+    for (const fileName of pcgenConfigFileNames) {
 
-export interface RunGeneratorOptions {
-    readonly name?: string;
-    readonly generator: string;
-    readonly step?: string;
-    readonly model: string;
-    readonly jsonPath: string;
-    readonly modelFormat: string;
-    readonly phases: string;
-    readonly dryRun: boolean;
-}
+      if (await fsExistsAsFile(helpers.config.atCwdFullPath(fileName))) {
+        return true
+      }
+    }
+    return false
+  }
 
-export type GeneratorEngine = "ejs" | "handlebars" | "liquid" | "mustache" | "nunjucks" | "pug" | "copy";
+  const createInitializeOptions = (options: InitializeOptions): GeneratorSystemConfig => {
+    const newConfig: Partial<Mutable<GeneratorSystemConfig>> = {}
 
-export interface CommonCommandStep {
-    readonly skip?: boolean;
-}
-
-export interface TemplateCommandStep extends CommonCommandStep {
-    readonly type: "template";
-    readonly to: string;
-    readonly from: string;
-    readonly engine?: GeneratorEngine;
-    readonly jsonPath?: string;
-    readonly model?: any;
-}
-
-export type CommandStep = TemplateCommandStep;
-
-export interface RunCommandResult {
-    readonly steps: ReadonlyArray<CommandStep>;
-}
-
-export interface RunCommandContext {
-    readonly name?: string;
-    readonly model?: any;
-    readonly console: Consola;
-    readonly genSystem: IGeneratorsSystem;
-    readonly generatorDescriptor: GeneratorDescriptor;
-    readonly commandDescriptor: CommandDescriptor;
-    readonly env: Record<string, string | undefined>;
-}
-
-export type RunCommandFunc = (context: RunCommandContext) => Promise<RunCommandResult | null>;
-
-export interface CommandDescriptor {
-    readonly name: string;
-    readonly js: string;
-    readonly details?: any;
-
-    runCommand: RunCommandFunc;
-}
-
-export interface GeneratorDescriptor {
-    readonly details?: any;
-    readonly outDir?: string;
-    readonly engine?: GeneratorEngine;
-    readonly commands: ReadonlyArray<CommandDescriptor>;
-}
-
-export interface GeneratorInfo {
-    readonly name: string;
-    readonly details?: any;
-    readonly outDir?: string;
-    readonly engine?: any;
-    readonly commands?: ReadonlyArray<CommandDescriptor>;
-    
-    readonly generatorDescriptor?: GeneratorDescriptor;
-}
-
-export function createGeneratorsSystem(console: Consola): IGeneratorsSystem {
-    // TODO: Define PCGEN_GENERATORS_HOME env var. Multiple sources?
-    // TODO: Define pcgen.json for configuration
-    // TODO: Look for parent folders when not found?
-    
-    const pcgenFolder = '_pcgen'
-    const generatorFolder = 'generator'
-    const commandsSubFolder = 'commands'
-    const templatesSubFolder = 'templates'
-    const defaultGeneratorCommand = 'new'
-    
-    const fullPath = (relativePath: string) => path.join(process.cwd(), relativePath)
-    const generatorPath = (generatorName: string) => path.join(pcgenFolder, generatorName)
-    const generatorFullPath = (generatorName: string) => fullPath(generatorPath(generatorName))
-    const itemPath = (generatorName: string, relativePath: string) => path.join(pcgenFolder, generatorName, relativePath)
-    const itemFullPath = (generatorName: string, relativePath: string) => fullPath(itemPath(generatorName, relativePath))
-    const commandPath = (generatorName: string, commandName: string) => itemPath(generatorName, path.join(commandsSubFolder, `${commandName}.js`))
-    // const commandFullPath = (generatorName: string, commandName: string) => fullPath(commandPath(generatorName, commandName))
-    
-    const pcgenBasePath = fullPath(pcgenFolder)
-    const generatorAssets = path.join(__dirname, '../assets/generator') 
-
-    const globalVariables: Record<string, string> = {
-        'CWD': process.cwd(),                       // Current Working Directory
-        'PWD': process.cwd(),                       // Process Working Directory, same as CWD
-        
-        'PCGEN_FOLDER': pcgenFolder,                // _pcgen
-        'GENERATOR_FOLDER': generatorFolder,        // generator
-        'COMMANDS_FOLDER': commandsSubFolder,       // commands
-        'TEMPLATES_FOLDER': templatesSubFolder,     // templates
-
-        'PCGEN_PATH': pcgenFolder,                  // _pcgen
-        'PCGEN_FULLPATH': fullPath(pcgenFolder),    // %CWD%/_pcgen
-
-        'GENERATOR_PATH': path.join(pcgenFolder, generatorFolder),   // _pcgen/generators
-        'GENERATOR_FULLPATH': generatorFullPath(generatorFolder),          // %CWD%/_pcgen/generators
+    if (!!options.searchPaths) {
+      newConfig.searchPaths = options.searchPaths.split(';')
     }
 
-    const getLocalVariables = (generatorName: string): Record<string, string> => {
-        const commandsPath = path.join(pcgenFolder, generatorName, commandsSubFolder)
-        const templatesPath = path.join(pcgenFolder, generatorName, templatesSubFolder)
-
-        return {
-            'GENERATOR_NAME': generatorName,
-            
-            'COMMANDS_PATH': commandsPath,                  // _pcgen/%GENERATOR_NAME%/commands
-            'COMMANDS_FULLPATH': fullPath(commandsPath),    // %CWD%/_pcgen/%GENERATOR_NAME%/commands
-            
-            'TEMPLATES_PATH': templatesPath,                // _pcgen/%GENERATOR_NAME%/templates
-            'TEMPLATES_FULLPATH': fullPath(templatesPath),  // %CWD%/_pcgen/%GENERATOR_NAME%/templates
-        }
+    if (!!options.basePath) {
+      newConfig.basePath = options.basePath
     }
 
-    const createEnvVariables = (generatorName: string) => {
-        return {
-            ...process.env,
-            ...globalVariables,
-            ...getLocalVariables(generatorName),
-        }
+    if (!!options.pcgenFolder) {
+      newConfig.pcgenFolder = options.pcgenFolder
     }
 
-    const replaceVariables = (generatorName: string, text: string): string => {
-        return text.replace(/%([A-Za-z_][A-Za-z_0-9]*)%/, (substring: string, varName: string): string => {
-            return globalVariables[varName] ??
-                getLocalVariables(generatorName)[varName] ??
-                process.env[varName] ??
-                substring
-        })
+    if (!!options.generatorFolder) {
+      newConfig.generatorFolder = options.generatorFolder
     }
 
-    const isInitialized = () => fsExistsAsDirectory(pcgenBasePath)
-
-    const ensureInitialized = async () => {
-        if (!(await isInitialized())) {
-            console.info('You must use command ', chalk.greenBright("'pcgen init'"), ' before start using pcgen')
-            return false;
-        }
-        return true;
+    if (!!options.commandsFolder) {
+      newConfig.commandsFolder = options.commandsFolder
     }
 
-    const initialize = async () => {
-        if (!(await isInitialized())) {
-            console.trace('Initializing pcgen ...')
-            fs.copy(generatorAssets, generatorFullPath(generatorFolder))
-        }
+    if (!!options.templatesFolder) {
+      newConfig.templatesFolder = options.templatesFolder
     }
 
-    const createRunCommand = (generatorName: string, jsFileName: string) => {
-        const runCommand = async (context: RunCommandContext) => {
-            const modulePath = path.join(process.cwd(), pcgenFolder, generatorName, commandsSubFolder, jsFileName)
-
-            console.trace(`Loading module ${jsFileName} at: `, modulePath);
-
-            // const cmdModule = await import(modulePath)
-            const cmdModule = await import(modulePath)
-
-            if (typeof cmdModule?.default?.run !== 'function') {
-                console.error(`Module '${modulePath}' does not exports function ${chalk.redBright('run(context)')}`)
-                return null
-            }
-
-            const runFunc: RunCommandFunc = cmdModule.default.run
-
-            const result: RunCommandResult | null = await runFunc(context)
-
-            // TODO: Validate result
-
-            return result
-        }
-
-        return runCommand
+    if (!!options.defaultCommand) {
+      newConfig.defaultCommand = options.defaultCommand
     }
 
-    const ensureGeneratorDescriptor = async (generatorName: string, generatorDescriptor: GeneratorDescriptor | undefined): Promise<GeneratorDescriptor> => {
-        if (generatorDescriptor) {
-            return generatorDescriptor;
-        }
-
-        const jsonPath = itemFullPath(generatorName, `${generatorName}.json`)
-        const jsonContent = await fsReadFileContent(jsonPath)
-        if (jsonContent) {
-            try {
-                generatorDescriptor = JSON.parse(replaceVariables(generatorName, jsonContent)) as GeneratorDescriptor;
-                console.trace('Read generator descriptor from ', jsonPath)
-
-                for (const command of generatorDescriptor.commands) {
-                    const runCommand = createRunCommand(generatorName, command.js)
-                    
-                    command.runCommand = runCommand
-                }
-
-                return generatorDescriptor;
-            } catch (error) {
-                console.trace('Error reading generator descriptor from ', jsonPath)
-            }
-        } else {
-            console.trace('Generator descriptor not found at ', jsonPath)
-        }
-
-        // Search commands in commands folder
-        const commands: CommandDescriptor[] = [];
-
-        const fileNames = await fs.readdir(itemFullPath(generatorName, commandsSubFolder))
-
-        for (const fileName of fileNames) {
-            if (await fsExistsAsFile(fileName)) {
-                const jsFileName = `${fileName}.js`;
-
-                const runCommand = createRunCommand(generatorName, jsFileName)
-
-                const cmd: CommandDescriptor = {
-                    name: fileName,
-                    js: `${fileName}.js`,
-                    runCommand,
-                }
-    
-                commands.push(cmd);
-            }
-        }
-
-        return {
-            commands,
-        }
+    if (!!options.cwd) {
+      newConfig.cwd = options.cwd
     }
 
-    const fetchGeneratorInfo = async (name: string, options: FetchGeneratorInfoOptions) => {
-        const folder = generatorFullPath(name)
-        const info: Mutable<GeneratorInfo> = {
-            name,
-        }
-        let projDesc: GeneratorDescriptor | undefined;
-
-        if (await fsExistsAsDirectory(folder)) {
-            if (options.details) {
-                projDesc = await ensureGeneratorDescriptor(name, projDesc)
-                info.engine = projDesc?.engine
-                info.outDir = projDesc?.outDir
-                info.details = projDesc?.details
-            }
-
-            if (options.commands) {
-                projDesc = await ensureGeneratorDescriptor(name, projDesc)
-                info.commands = projDesc?.commands
-            }
-
-            return info as GeneratorInfo;
-        }
-        
-        return null
+    if (!!options.generatorAssets) {
+      newConfig.generatorAssets = options.generatorAssets
     }
 
-    const fetchGeneratorsInfo = async (options: FetchGeneratorInfoOptions) => {
-        const files = await fs.readdir(pcgenBasePath)
-        const infos: GeneratorInfo[] = []
-        
-        console.trace(`Searching generators at ${pcgenBasePath}`)
-        for (const name of files) {
-            const info = await fetchGeneratorInfo(name, options)
-            if (!!info) {
-                console.trace(`Found generator "${name}"`)
-    
-                infos.push(info)
-            } else {
-                console.trace(`Found invalid generator file ${name}`)
-            }
-        }
+    return createGeneratorSystemConfig(newConfig)
+  }
 
-        return infos;
+  const initialize = async (options: InitializeOptions) => {
+    if (!(await isInitialized())) {
+      console.trace('initialize: Initializing pcgen ...');
+
+      const newConfig = createInitializeOptions(options)
+      const configHelpers = createConfigHelpers(newConfig)
+      
+      const source = newConfig.generatorAssets;
+      const target = configHelpers.atPcgenFullPath(newConfig.generatorFolder);
+      fs.copy(source, target);
+      console.trace(`initialize: Copied folder "${source}" to "${target}"`);
+      
+      const configPath = configHelpers.atCwdFullPath(pcgenConfigFileNames[0])
+      const jsonContent = JSON.stringify(newConfig, null, 4)
+      await fsWriteFileContent(configPath, jsonContent)
+      console.trace(`initialize: Writen config at "${configPath}"`);
+    }
+  };
+
+  const ensureInitialized = async () => {
+    if (!(await isInitialized())) {
+      console.info(
+        `You must use command '${chalk.greenBright(
+          "'pcgen init'"
+        )}' before start using pcgen`
+      );
+      return false;
+    }
+    return true;
+  };
+
+  //   const createRunCommand = (generatorName: string, jsFileName: string) => {
+  //     const runCommand = async (context: RunCommandContext) => {
+  //       const modulePath = joinPaths(
+  //         cwd,
+  //         pcgenFolder,
+  //         generatorName,
+  //         commandsSubFolder,
+  //         jsFileName
+  //       );
+
+  //       console.trace(
+  //         `createRunCommand: Loading module ${jsFileName} at: `,
+  //         modulePath
+  //       );
+
+  //       // const cmdModule = await import(modulePath)
+  //       const cmdModule = await import(modulePath);
+
+  //       if (typeof cmdModule?.default?.run !== 'function') {
+  //         console.error(
+  //           `Module '${modulePath}' does not exports function ${chalk.redBright(
+  //             'run(context)'
+  //           )}`
+  //         );
+  //         return null;
+  //       }
+
+  //       const runFunc: RunCommandFunc = cmdModule.default.run;
+
+  //       const result: RunCommandResult | null = await runFunc(context);
+
+  //       // TODO: Validate result
+
+  //       return result;
+  //     };
+
+  //     return runCommand;
+  //   };
+
+  const locateGenerator = async (
+    generatorName: string
+  ): Promise<string | undefined> => {
+    if (!generatorName) {
+      throw new Error('Generator name cannot be empty');
     }
 
-    const processGenerator = async (context: RunCommandContext, _opts: RunGeneratorOptions) => {
-        // console.log('context', context)
+    for (const searchPath of [
+      helpers.config.pcgenFullPath,
+      ...config.searchPaths,
+    ]) {
+      const searchFullPath = helpers.config.atCwdFullPath(searchPath);
 
-        var runResult = await context.commandDescriptor.runCommand(context)
+      const generatorFullPath = joinPaths(
+        searchFullPath,
+        config.pcgenFolder,
+        generatorName
+      );
 
-        console.log('runResult', runResult)
+      if (await fsExistsAsDirectory(generatorFullPath)) {
+        return generatorFullPath;
+      }
     }
 
-    const runGenerator = async (opts: RunGeneratorOptions) => {
-        
-        const name = opts.name ?? defaultGeneratorCommand
+    return undefined;
+  };
 
-        // TODO: Optimize loading only the given command, instead of the entire generator
-        const generatorDescriptor = await ensureGeneratorDescriptor(opts.generator, undefined)
+  const searchGeneratorNames = async (
+    generatorName?: string | RegExp
+  ): Promise<string[]> => {
+    const result: string[] = [];
 
-        if (!generatorDescriptor) {
-            console.error(`Generator '${chalk.redBright(opts.generator)}' does not exists. Run '${chalk.greenBright(`pcgen new generator {opts.generator}`)}' to create it.`)
-            return;
+    for (const searchPath of [
+      helpers.config.baseFullPath,
+      ...config.searchPaths,
+    ]) {
+      console.trace(`searchGeneratorNames: Searching at path '${searchPath}'`)
+      
+      const searchFullPath = helpers.config.atCwdFullPath(searchPath);
+      console.trace(`searchGeneratorNames: Searching at full path '${searchFullPath}'`)
+      
+      const pcgenFullPath = joinPaths(searchFullPath, config.pcgenFolder);
+      console.trace(`searchGeneratorNames: Searching at pcgen path '${pcgenFullPath}'`)
+      
+      const directoryNames = await fsListDirectories(pcgenFullPath);
+      console.trace(`searchGeneratorNames: Found directories: ${directoryNames.join(', ')}`)
+
+      for (const directoryName of directoryNames) {
+        if (generatorName && !directoryName.match(generatorName)) {
+          continue;
         }
-
-        var commandDescriptor = generatorDescriptor.commands.find(c => c.name == name);
-
-        if (!commandDescriptor) {
-            console.error(`Command '${chalk.redBright(name)}' does not exists in generator '${chalk.greenBright(opts.generator)}'. Create file '${chalk.greenBright(commandPath(opts.generator, name))}' to enable it`)
-            return;
-        }
-        
-        const context: RunCommandContext = {
-            console,
-            env: createEnvVariables(opts.generator),
-            genSystem,
-            name: name,
-            generatorDescriptor,
-            commandDescriptor,
-        }
-
-        await processGenerator(context, opts)
+        result.push(directoryName);
+      }
     }
 
-    const genSystem : IGeneratorsSystem = {
-        isInitialized,
-        initialize,
-        ensureInitialized,
-        fetchGeneratorInfo,
-        fetchGeneratorsInfo,
-        runGenerator,
+    return result;
+  };
+
+  const getGeneratorDescriptorJsonFileName = (generatorName: string) =>
+    `${generatorName}.json`;
+
+  const readGeneratorDescriptorDataAsJson = async (
+    generatorName: string,
+    generatorFullPath: string,
+    ...variables: Variables[]
+  ): Promise<GeneratorDescriptorData> => {
+    const fileFullPath = joinPaths(
+      generatorFullPath,
+      getGeneratorDescriptorJsonFileName(generatorName)
+    );
+
+    try {
+      const jsonContent = await fsReadFileContent(fileFullPath);
+
+      if (jsonContent) {
+        const data: GeneratorDescriptorData = JSON.parse(
+          replaceVariables(jsonContent, ...variables)
+        );
+
+        console.trace(
+          'readGeneratorDescriptorAsJson: Read from ',
+          fileFullPath
+        );
+
+        return data;
+      } else {
+        throw tracedError(
+          console,
+          `readGeneratorDescriptorAsJson: Not found at "${fileFullPath}"`
+        );
+      }
+    } catch (error) {
+      throw tracedError(
+        console,
+        `readGeneratorDescriptorAsJson: Error reading from "${fileFullPath}"`
+      );
+    }
+  };
+
+  const createGeneratorDescriptor = (
+    data: GeneratorDescriptorData,
+    generatorFullPath: string
+  ): GeneratorDescriptor => {
+    const commands = data.commands.map((cmdData) => {
+      const command: CommandDescriptor = {
+        data: cmdData,
+        runCommand: async () => {
+          return null;
+        },
+        get generator() {
+          return generator;
+        },
+      };
+      return command;
+    });
+
+    const generator: GeneratorDescriptor = {
+      data,
+      fullPath: generatorFullPath,
+      engine: findGeneratorEngine(data.engine, console),
+      commands,
+    };
+
+    return generator;
+  };
+
+  const loadGenerator = async (
+    generatorName: string
+  ): Promise<GeneratorDescriptor | undefined> => {
+    const generatorFullPath = await locateGenerator(generatorName);
+
+    if (!generatorFullPath) {
+      return undefined;
     }
 
-    return genSystem
+    const generatorData = await readGeneratorDescriptorDataAsJson(
+      generatorName,
+      generatorFullPath
+    );
+
+    const generator = createGeneratorDescriptor(
+      generatorData,
+      generatorFullPath
+    );
+
+    return generator;
+  };
+
+  const getGeneratorDescriptor = async (generatorName: string) => {
+    return await loadGenerator(generatorName);
+  };
+
+  const listGenerators = async (options: ListGeneratorsOptions) => {
+    return await searchGeneratorNames(options.name);
+  };
+
+  // const processGenerator = async (
+  //   parentContext: RunCommandContext | null,
+  //   opts: RunGeneratorOptions
+  // ) => {
+  //   // console.trace('processGenerator: opts', opts)
+
+  //   const name = opts.name ?? defaultGeneratorCommand;
+
+  //   console.trace(
+  //     `processGenerator: Running ${chalk.greenBright(
+  //       opts.generator
+  //     )}'s ${chalk.greenBright(name)} command`
+  //   );
+
+  //   // TODO: Optimize loading only the given command, instead of the entire generator
+  //   const generatorDescriptor = await ensureGeneratorDescriptor(
+  //     opts.generator,
+  //     undefined
+  //   );
+
+  //   if (!generatorDescriptor) {
+  //     console.error(
+  //       `processGenerator: Generator '${chalk.redBright(
+  //         opts.generator
+  //       )}' does not exists. Run '${chalk.greenBright(
+  //         `pcgen new generator {opts.generator}`
+  //       )}' to create it.`
+  //     );
+  //     return;
+  //   }
+
+  //   var commandDescriptor = generatorDescriptor.commands.find(
+  //     (c) => c.name == name
+  //   );
+
+  //   if (!commandDescriptor) {
+  //     console.error(
+  //       `processGenerator: Command '${chalk.redBright(
+  //         name
+  //       )}' does not exists in generator '${chalk.greenBright(
+  //         opts.generator
+  //       )}'. Create file '${chalk.greenBright(
+  //         commandPath(opts.generator, name)
+  //       )}' to enable it`
+  //     );
+  //     return;
+  //   }
+
+  //   const context: RunCommandContext = {
+  //     parent: parentContext,
+  //     console,
+  //     env: createEnvVariables(opts.generator),
+  //     genSystem,
+  //     name: name,
+  //     generatorDescriptor,
+  //     commandDescriptor,
+  //   };
+
+  //   // console.trace('processGenerator: context', context)
+
+  //   const runResult = await context.commandDescriptor.runCommand(context);
+
+  //   // TODO: Validate runResult with joi/jsonSchema
+
+  //   console.log('runResult', runResult);
+  // };
+
+  // const runGenerator = async (opts: RunGeneratorOptions) => {
+  //   await processGenerator(null, opts);
+  // };
+
+  const genSystem: IGeneratorsSystem = {
+    isInitialized,
+    initialize,
+    ensureInitialized,
+    getGeneratorDescriptor,
+    listGenerators,
+    runGenerator: async () => {},
+  };
+
+  return genSystem;
 }

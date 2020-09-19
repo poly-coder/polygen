@@ -3,7 +3,7 @@ module.exports = {
         return {
             steps: [
                 {
-                    type: "template",
+                    type: "file",
                     to: "hello-world.txt",
                     from: "hello-world.txt",
                     engine: "ejs"

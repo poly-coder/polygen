@@ -1,33 +1,46 @@
-import commander from "commander";
-import { printGeneratorInfo } from "./command-info";
-import { getOptions, PCGenProgramOptions } from "./common";
-import { getConsola } from "./logging";
-import { createGeneratorsSystem, FetchGeneratorInfoOptions } from "./gen-system";
+import commander, { Command } from 'commander';
+// import { printGeneratorInfo } from "./command-info";
+import { getOptions, PCGenProgramOptions } from './common';
+import { getConsola } from './logging';
+import { createGeneratorsSystem } from './gen-system';
+import { readGeneratorSystemConfig } from './gen-configuration';
+import { ListGeneratorsOptions } from './gen-types';
+import chalk from 'chalk';
 
-export interface ListCommandOptions extends PCGenProgramOptions, FetchGeneratorInfoOptions {
-}
+export interface ListCommandOptions
+  extends PCGenProgramOptions,
+    ListGeneratorsOptions {}
 
 export function listCommand(command: commander.Command) {
-    command
-        .command("list")
-        .alias('ls')
-        .description("List existing generators and commands")
-        .option('-d, --details', 'Show generator details', false)
-        .option('-c, --commands', 'Show generator commands', false)
-        .action(args => executeListCommand(getOptions(args)))
-    }
-    
+  command
+    .command('list')
+    .alias('ls')
+    .description('List existing generators and commands')
+    .arguments('[name]')
+    .action((name: string, args: Command) =>
+      executeListCommand({
+        ...getOptions(args),
+        name,
+      })
+    );
+}
+
 async function executeListCommand(opts: ListCommandOptions) {
-    const console = getConsola(opts);
-    const genSystem = createGeneratorsSystem(console);
+  const console = getConsola(opts);
+  const config = await readGeneratorSystemConfig(console);
+  const genSystem = createGeneratorsSystem(config, console);
 
-    if (!(await genSystem.ensureInitialized())) {
-        return;
+  if (!(await genSystem.ensureInitialized())) {
+    return;
+  }
+
+  var generators = await genSystem.listGenerators(opts);
+
+  if (generators?.length > 0) {
+    for (const generator of generators) {
+      console.info(`- ${chalk.greenBright(generator)}`);
     }
-
-    var infos = await genSystem.fetchGeneratorsInfo(opts)
-
-    for (const info of infos) {
-        printGeneratorInfo(info, console)
-    }
+  } else {
+    console.info(`No generators found`);
+  }
 }

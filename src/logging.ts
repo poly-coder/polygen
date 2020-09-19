@@ -1,6 +1,8 @@
 import consola, { LogLevel } from "consola";
 import commander from "commander";
 import { PCGenProgramOptions } from "./common";
+import chalk from "chalk";
+import { capitalCase } from "change-case";
 
 export function logLevelOption(command: commander.Command) {
     command
@@ -62,4 +64,24 @@ export function getConsola(opts: PCGenProgramOptions) {
     return consola.create({
         level: opts.logLevel,
     })
+}
+
+export function printField(key: string, value: any, indent: string = '') {
+    if (value == null || value == undefined) {
+        return
+    }
+    if ((key + value).length > 40) {
+        console.log(`${indent}    ${chalk.white(key)}:`)
+        console.log(`${indent}        ${chalk.gray(value)}`)
+    } else {
+        console.log(`${indent}    ${chalk.white(key)}: ${chalk.gray(value)}`)
+    }
+}
+
+export function printDetails(details?: any, indent: string = '') {
+    if (details) {
+        for (const [key, value] of Object.entries(details)) {
+            printField(capitalCase(key), value, indent);
+        }
+    }
 }

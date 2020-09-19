@@ -2,7 +2,7 @@ import { GeneratorSystemConfig, Variables } from './gen-types';
 import path from 'path';
 import { Consola } from 'consola';
 import { fsReadFileContent, joinPaths } from './file-utils';
-import { tracedError } from './utils';
+import { tracedError } from './logging';
 
 const defaultGeneratorSystemConfig: GeneratorSystemConfig = {
   searchPaths: [],
@@ -13,7 +13,10 @@ const defaultGeneratorSystemConfig: GeneratorSystemConfig = {
   templatesFolder: 'templates',
   defaultCommand: 'new',
   cwd: '.',
-  generatorAssets: path.relative('.', joinPaths(__dirname, '../assets/generator')),
+  generatorAssets: path.relative(
+    '.',
+    joinPaths(__dirname, '../assets/generator')
+  ),
 };
 
 export function createGeneratorSystemConfig(
@@ -38,7 +41,10 @@ export async function readGeneratorSystemConfig(
         const options = JSON.parse(content);
         return createGeneratorSystemConfig(options);
       } catch (error) {
-        throw tracedError(console, `Error reading generator configuration from file '${fileName}'`)
+        throw tracedError(
+          console,
+          `Error reading generator configuration from file '${fileName}'`
+        );
       }
     }
   }
@@ -58,15 +64,16 @@ export function createConfigHelpers(config: GeneratorSystemConfig) {
 
   // %BASE_PATH%/_pcgen
   const pcgenPath = joinPaths(config.basePath, config.pcgenFolder);
-  
+
   // /**/%BASE_PATH%/_pcgen
   const pcgenFullPath = joinPaths(baseFullPath, config.pcgenFolder);
-  
+
   // %BASE_PATH%/<relative-path>
   const atPcgenPath = (...paths: string[]) => joinPaths(pcgenPath, ...paths);
-  
+
   // /**/%BASE_PATH%/<relative-path>
-  const atPcgenFullPath = (...paths: string[]) => joinPaths(pcgenFullPath, ...paths);
+  const atPcgenFullPath = (...paths: string[]) =>
+    joinPaths(pcgenFullPath, ...paths);
 
   // // %BASE_PATH%/_pcgen/<generator>/relativePath
   // const itemPath = (generatorName: string, relativePath: string) =>
@@ -76,21 +83,13 @@ export function createConfigHelpers(config: GeneratorSystemConfig) {
   // const itemFullPath = (generatorName: string, relativePath: string) =>
   //   pcgenFullPath(itemPath(generatorName, relativePath));
 
-  // // _pcgen/<generator>/commands/<relative-path>
-  // const commandPath = (generatorName: string, relativePath: string) =>
-  //   itemPath(generatorName, joinPaths(config.commandsFolder, relativePath));
+  // %GENERATOR_PATH%/commands/<relative-path>
+  const atCommandsPath = (generatorFullPath: string, ...paths: string[]) =>
+    joinPaths(generatorFullPath, config.commandsFolder, ...paths);
 
-  // //   // %CWD%/_pcgen/<generator>/commands/<relative-path>
-  // //   const commandFullPath = (generatorName: string, relativePath: string) =>
-  // //     fullPath(commandPath(generatorName, relativePath));
-
-  // // _pcgen/<generator>/templates/<relative-path>
-  // const templatePath = (generatorName: string, relativePath: string) =>
-  //   itemPath(generatorName, joinPaths(config.templatesFolder, relativePath));
-
-  // //   // %CWD%/_pcgen/<generator>/templates/<relative-path>
-  // //   const templateFullPath = (generatorName: string, relativePath: string) =>
-  // //     fullPath(templatePath(generatorName, relativePath));
+  // %GENERATOR_PATH%/templates/<relative-path>
+  const atTemplatesPath = (generatorFullPath: string, ...paths: string[]) =>
+    joinPaths(generatorFullPath, config.templatesFolder, ...paths);
 
   return {
     // Strings
@@ -98,13 +97,13 @@ export function createConfigHelpers(config: GeneratorSystemConfig) {
     pwd: cwd,
     basePath: config.basePath,
     baseFullPath,
-    
+
     pcgenFolder: config.pcgenFolder,
     pcgenPath,
     pcgenFullPath,
-    
+
     generatorFolder: config.generatorFolder,
-    
+
     commandsFolder: config.commandsFolder,
     templatesFolder: config.templatesFolder,
     defaultCommand: config.defaultCommand,
@@ -120,10 +119,8 @@ export function createConfigHelpers(config: GeneratorSystemConfig) {
     // generatorFullPath,
     // itemPath,
     // // itemFullPath,
-    // commandPath,
-    // // commandFullPath,
-    // templatePath,
-    // // templateFullPath,
+    atCommandsPath,
+    atTemplatesPath,
 
     vars: {
       CWD: cwd,
@@ -163,18 +160,24 @@ export function createGeneratorConfigHelpers(
 export function extractVariables(helpers: any): Variables {
   return Object.values(helpers)
     .map((h: any) => h['vars'])
-    .filter((vars) => !!vars && typeof vars === 'object' && vars.constructor === Object)
+    .filter(
+      (vars) =>
+        !!vars && typeof vars === 'object' && vars.constructor === Object
+    )
     .reduce((accum, vars) => ({ ...accum, ...vars }), {} as Variables);
 }
 
-export function replaceVariables(text: string, ...variables: Variables[]): string {
+export function replaceVariables(
+  text: string,
+  ...variables: Variables[]
+): string {
   return text.replace(
     /%([A-Za-z_][A-Za-z_0-9]*)%/,
     (substring: string, varName: string): string => {
       for (const vars of variables) {
-        const result = vars[varName]
+        const result = vars[varName];
         if (result) {
-          return result
+          return result;
         }
       }
       return substring;

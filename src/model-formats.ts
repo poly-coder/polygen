@@ -1,6 +1,6 @@
 import chalk from "chalk"
 import { Consola } from "consola"
-import { tracedError } from "./utils"
+import { tracedError } from "./logging"
 
 export enum ModelFormatEnum {
     Module, 

@@ -1,4 +1,4 @@
-import consola, { LogLevel } from "consola";
+import consola, { Consola, LogLevel } from "consola";
 import commander from "commander";
 import { PCGenProgramOptions } from "./common";
 import chalk from "chalk";
@@ -84,4 +84,9 @@ export function printDetails(details?: any, indent: string = '') {
             printField(capitalCase(key), value, indent);
         }
     }
+}
+
+export function tracedError(console: Consola, message: string) {
+    console.error(message);
+    return new Error(message)
 }

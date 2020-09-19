@@ -108,6 +108,7 @@ export interface GeneratorDescriptor {
     readonly commands: ReadonlyArray<CommandDescriptor>;
     readonly engine?: GeneratorEngine;
     readonly data: GeneratorDescriptorData;
+    readonly outDir: string;
 }
 
 export interface IGeneratorsSystem {

@@ -104,6 +104,7 @@ export interface GeneratorDescriptorData {
 
 export interface GeneratorDescriptor {
     readonly fullPath: string;
+    readonly name: string;
     readonly commands: ReadonlyArray<CommandDescriptor>;
     readonly engine?: GeneratorEngine;
     readonly data: GeneratorDescriptorData;

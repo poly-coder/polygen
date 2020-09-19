@@ -49,8 +49,8 @@ export function createGeneratorsSystem(
     console,
   };
 
-  console.trace('config', config);
-  console.trace('helpers.config', helpers.config);
+  // console.trace('config', config);
+  // console.trace('helpers.config', helpers.config);
   // console.trace('helpers', helpers);
 
   const variables = extractVariables(helpers);
@@ -58,11 +58,15 @@ export function createGeneratorsSystem(
 
   const isInitialized = async () => {
     for (const fileName of pcgenConfigFileNames) {
-
-      if (await fsExistsAsFile(helpers.config.atCwdFullPath(fileName))) {
+      const fullPath = helpers.config.atCwdFullPath(fileName);
+      if (await fsExistsAsFile(fullPath)) {
+        console.trace(`isInitialized: Found config file at: '${fullPath}'`)
         return true
+      } else {
+        console.trace(`isInitialized: Did not found config file at: '${fullPath}'`)
       }
     }
+    console.trace(`isInitialized: Did not found anyconfig file`)
     return false
   }
 
@@ -186,22 +190,29 @@ export function createGeneratorsSystem(
     }
 
     for (const searchPath of [
-      helpers.config.pcgenFullPath,
+      helpers.config.baseFullPath,
       ...config.searchPaths,
     ]) {
+      console.trace(`locateGenerator: Locating generator '${generatorName}' at path '${searchPath}'`)
+      
       const searchFullPath = helpers.config.atCwdFullPath(searchPath);
+      console.trace(`locateGenerator: Locating generator '${generatorName}' at full path '${searchFullPath}'`)
 
       const generatorFullPath = joinPaths(
         searchFullPath,
         config.pcgenFolder,
         generatorName
       );
-
+      console.trace(`locateGenerator: Expected generator '${generatorName}' full path would be at '${generatorFullPath}'`)
+      
       if (await fsExistsAsDirectory(generatorFullPath)) {
+        console.trace(chalk.greenBright(`locateGenerator: Generator '${generatorName}' found at '${generatorFullPath}'`))
         return generatorFullPath;
       }
+      console.trace(chalk.yellowBright(`locateGenerator: Generator '${generatorName}' not found at '${generatorFullPath}'`))
     }
-
+    
+    console.trace(chalk.redBright(`locateGenerator: Generator '${generatorName}' not found at anywhere`))
     return undefined;
   };
 
@@ -279,6 +290,7 @@ export function createGeneratorsSystem(
 
   const createGeneratorDescriptor = (
     data: GeneratorDescriptorData,
+    generatorName: string,
     generatorFullPath: string
   ): GeneratorDescriptor => {
     const commands = data.commands.map((cmdData) => {
@@ -296,6 +308,7 @@ export function createGeneratorsSystem(
 
     const generator: GeneratorDescriptor = {
       data,
+      name: generatorName,
       fullPath: generatorFullPath,
       engine: findGeneratorEngine(data.engine, console),
       commands,
@@ -320,6 +333,7 @@ export function createGeneratorsSystem(
 
     const generator = createGeneratorDescriptor(
       generatorData,
+      generatorName,
       generatorFullPath
     );
 

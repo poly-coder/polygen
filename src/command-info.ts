@@ -1,85 +1,71 @@
-// import chalk from "chalk";
-// import commander from "commander";
-// import { capitalCase } from "change-case";
-// import { Consola } from "consola";
-// import { getOptions, PCGenProgramOptions } from "./common";
-// import { getConsola } from "./logging";
-// import { createGeneratorsSystem, FetchGeneratorInfoOptions, GeneratorInfo } from "./gen-system";
+import chalk from 'chalk';
+import commander from 'commander';
+import { Consola } from 'consola';
+import { getOptions, PCGenProgramOptions } from './common';
+import { getConsola, printDetails, printField } from './logging';
+import { createGeneratorsSystem } from './gen-system';
+import { readGeneratorSystemConfig } from './gen-configuration';
+import { GeneratorDescriptor } from './gen-types';
 
-// export interface InfoCommandOptions extends PCGenProgramOptions, FetchGeneratorInfoOptions {
-//     readonly project: string;
-// }
+export interface InfoCommandOptions extends PCGenProgramOptions {
+  readonly generatorName: string;
+}
 
-// export function infoCommand(command: commander.Command) {
-//     command
-//         .command("info")
-//         .alias('i')
-//         .description("Show detailed information of a generator project")
-//         .arguments("<project>")
-//         .option('-d, --details', 'Show generator details', true)
-//         .option('--no-details', 'Hide generator details')
-//         .option('-c, --commands', 'Show generator commands', true)
-//         .option('--no-commands', 'Hide generator commands')
-//         .action((project: string, args) => executeListCommand({
-//             ...getOptions(args),
-//             project,
-//         }))
-//     }
-    
-// async function executeListCommand(opts: InfoCommandOptions) {
-//     const console = getConsola(opts);
-//     const genSystem = createGeneratorsSystem(console);
+export function infoCommand(command: commander.Command) {
+  command
+    .command('info')
+    .alias('i')
+    .description('Show detailed information of a generator')
+    .arguments('<generator>')
+    .action((generator: string, args) =>
+      executeInfoCommand({
+        ...getOptions(args),
+        generatorName: generator,
+      })
+    );
+}
 
-//     if (!(await genSystem.ensureInitialized())) {
-//         return;
-//     }
+async function executeInfoCommand(opts: InfoCommandOptions) {
+  const console = getConsola(opts);
+  const config = await readGeneratorSystemConfig(console);
+  const genSystem = createGeneratorsSystem(config, console);
 
-//     var info = await genSystem.fetchGeneratorInfo(opts.project, opts)
-    
-//     if (info) {
-//         printGeneratorInfo(info, console)
-//     } else {
-//         console.warn(`Generator project "${opts.project}" does not exists`)
-//     }
-// }
+  if (!(await genSystem.ensureInitialized())) {
+    return;
+  }
 
-// function printField(key: string, value: any, indent: string = '') {
-//     if (value == null || value == undefined) {
-//         return
-//     }
-//     if ((key + value).length > 40) {
-//         console.log(`${indent}    ${chalk.white(key)}:`)
-//         console.log(`${indent}        ${chalk.gray(value)}`)
-//     } else {
-//         console.log(`${indent}    ${chalk.white(key)}: ${chalk.gray(value)}`)
-//     }
-// }
+  var info = await genSystem.getGeneratorDescriptor(opts.generatorName);
 
-// function printDetails(details?: any, indent: string = '') {
-//     if (details) {
-//         for (const [key, value] of Object.entries(details)) {
-//             printField(capitalCase(key), value, indent);
-//         }
-//     }
-// }
+  if (info) {
+    printGenerator(info, console);
+  } else {
+    console.warn(
+      `Generator project "${chalk.redBright(
+        opts.generatorName
+      )}" does not exists. Use '${chalk.greenBright(
+        `pcgen new generator ${opts.generatorName}`
+      )}' to create it `
+    );
+  }
+}
 
-// export function printGeneratorInfo(info: GeneratorInfo, console: Consola) {
-//     console.log(`- ${chalk.greenBright(info.name)}`)
-    
-//     printField('Engine', info.engine);
-//     printField('Output Directory', info.outDir);
-//     printDetails(info.details)
+export function printGenerator(info: GeneratorDescriptor, console: Consola) {
+  console.log(`- ${chalk.greenBright(info.name)}`);
 
-//     if (info.commands) {
-//         if (info.commands.length > 0) {
-//             printField('Commands', '')
-//             for (const command of info.commands) {
-//                 console.log(`    > ${chalk.cyanBright(command.name)}`)
-//                 printField('Code File', command.js, '    ');
-//                 printDetails(command.details, '    ')
-//             }
-//         } else {
-//             printField('Commands', 'none')
-//         }
-//     }
-// }
+  printField('Engine', info.engine?.name);
+  printField('Output Directory', info.data.outDir);
+  printDetails(info.data.details);
+
+  if (info.commands) {
+    if (info.commands.length > 0) {
+      printField('Commands', '');
+      for (const command of info.commands) {
+        console.log(`    > ${chalk.cyanBright(command.data.name)}`);
+        printField('Code File', command.data.js, '    ');
+        printDetails(command.data.details, '    ');
+      }
+    } else {
+      printField('Commands', 'none');
+    }
+  }
+}

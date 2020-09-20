@@ -72,13 +72,21 @@ export interface SnippetCommandStep extends TemplateBasedCommandStep {
      */
     readonly type: "snippet";
     /**
-     * A regex to indicate the start line where the generated content must be inserted
+     * A text to indicate the start line where the generated content must be inserted
      */
     readonly start: string;
     /**
-     * A regex to indicate the end line where the generated content must be inserted
+     * A text to indicate the end line where the generated content must be inserted
      */
     readonly end: string;
+    /**
+     * A RegExp to indicate the start line where the generated content must be inserted
+     */
+    readonly startRegExp: string;
+    /**
+     * A RegExp to indicate the end line where the generated content must be inserted
+     */
+    readonly endRegExp: string;
 }
 
 export interface GeneratorCommandStep extends CommonCommandStep {

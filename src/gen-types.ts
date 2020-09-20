@@ -73,6 +73,7 @@ export interface RunGeneratorOptions {
     readonly phases?: string;
     readonly dryRun: boolean;
     readonly overwrite?: boolean;
+    readonly stdout?: boolean;
 }
 
 export interface RunCommandResult {

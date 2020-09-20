@@ -22,6 +22,7 @@ export function newCommand(command: commander.Command) {
         .option('-w, --overwrite', 'Overwrite all generated files without asking. By default no existing file is overwritten')
         .option('--no-overwrite', 'Never overwrite an existing file with a generated one. This excludes snippet insertion step')
         .option('--phases <phase>', 'Last phase to run: none, validate, pregenerate, generate, postgenerate or all', 'all')
+        .option('--stdout', 'Print generated content to stdout. Unless option --dry-run is specified, the content is ALSO WRITTEN to files')
         .action((generator: string, name: string, args) => executeNewCommand({
             ...getOptions(args),
             name,

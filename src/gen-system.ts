@@ -37,7 +37,11 @@ import {
 } from './gen-configuration';
 import { shorten, tracedError } from './logging';
 import { findGeneratorEngine, GeneratorEngine } from './generator-engines';
-import { CopyCommandStep, FileCommandStep } from './gen-steps';
+import {
+  CopyCommandStep,
+  FileCommandStep,
+  SnippetCommandStep,
+} from './gen-steps';
 import path from 'path';
 import { findModelFormat, findModelFormatFromExtension } from './model-formats';
 
@@ -137,7 +141,9 @@ export function createGeneratorsSystem(
       const sourceGitIgnore = joinPaths(newConfig.initAssets, '_gitignore');
       const targetGitIgnore = configHelpers.atPcgenFullPath('.gitignore');
       fs.copy(sourceGitIgnore, targetGitIgnore);
-      console.trace(`initialize: Copied file "${sourceGitIgnore}" to "${targetGitIgnore}"`);
+      console.trace(
+        `initialize: Copied file "${sourceGitIgnore}" to "${targetGitIgnore}"`
+      );
 
       const configPath = configHelpers.atCwdFullPath(pcgenConfigFileNames[0]);
       const jsonContent = JSON.stringify(newConfig, null, 4);
@@ -317,7 +323,12 @@ export function createGeneratorsSystem(
     generatorName: string,
     generatorFullPath: string
   ): GeneratorDescriptor => {
-    const outDir = path.relative(helpers.config.cwd, data.outDir ? helpers.config.atCwdFullPath(data.outDir) : helpers.config.cwd)
+    const outDir = path.relative(
+      helpers.config.cwd,
+      data.outDir
+        ? helpers.config.atCwdFullPath(data.outDir)
+        : helpers.config.cwd
+    );
 
     const commands = data.commands.map((cmdData) => {
       const command: CommandDescriptor = {
@@ -378,7 +389,7 @@ export function createGeneratorsSystem(
   const canOverwrite = (
     localOverwrite: boolean | undefined,
     context: RunCommandContext,
-    opts: RunGeneratorOptions,
+    opts: RunGeneratorOptions
   ) => {
     // If the user says so, it is what it is
     if (opts.overwrite !== undefined) {
@@ -386,44 +397,47 @@ export function createGeneratorsSystem(
     }
 
     if (localOverwrite !== undefined) {
-      return localOverwrite
+      return localOverwrite;
     }
 
-    const commandOverwrite = context.commandDescriptor.data.overwrite
+    const commandOverwrite = context.commandDescriptor.data.overwrite;
     if (commandOverwrite !== undefined) {
-      return commandOverwrite
+      return commandOverwrite;
     }
 
-    const generatorOverwrite = context.generatorDescriptor.data.overwrite
+    const generatorOverwrite = context.generatorDescriptor.data.overwrite;
     if (generatorOverwrite !== undefined) {
-      return generatorOverwrite
+      return generatorOverwrite;
     }
 
     // Do not overwrite by default
-    return false
-  }
+    return false;
+  };
 
-  const searchTemplateEngine = (localEngine: string | undefined, context: RunCommandContext): GeneratorEngine => {
-    let engine = findGeneratorEngine(localEngine, console)
-
-    if (engine) {
-      return engine
-    }
-
-    engine = context.generatorDescriptor.engine
+  const searchTemplateEngine = (
+    localEngine: string | undefined,
+    context: RunCommandContext
+  ): GeneratorEngine => {
+    let engine = findGeneratorEngine(localEngine, console);
 
     if (engine) {
-      return engine
+      return engine;
     }
 
-    engine = findGeneratorEngine('ejs', console)
+    engine = context.generatorDescriptor.engine;
 
     if (engine) {
-      return engine
+      return engine;
     }
 
-    throw tracedError(console, 'There are no template engines available')
-  }
+    engine = findGeneratorEngine('ejs', console);
+
+    if (engine) {
+      return engine;
+    }
+
+    throw tracedError(console, 'There are no template engines available');
+  };
 
   const loadModel = async (
     model: string | any | undefined,
@@ -432,27 +446,90 @@ export function createGeneratorsSystem(
     previousModel?: any
   ): Promise<any> => {
     if (jsonPath) {
-      const baseModel = await loadModel(model, modelFormat, undefined, previousModel)
-      const jpp = await import('jsonpath-plus')
-      const result = jpp.JSONPath({ path: jsonPath, json: baseModel })
-      return result
+      const baseModel = await loadModel(
+        model,
+        modelFormat,
+        undefined,
+        previousModel
+      );
+      const jpp = await import('jsonpath-plus');
+      const result = jpp.JSONPath({ path: jsonPath, json: baseModel });
+      return result;
     }
 
     if (typeof model === 'string') {
-      let loader = findModelFormat(modelFormat, console)
+      let loader = findModelFormat(modelFormat, console);
       if (!loader) {
-        loader = findModelFormatFromExtension(path.extname(model), console)
+        loader = findModelFormatFromExtension(path.extname(model), console);
       }
-      const filePath = helpers.config.atCwdFullPath(model)
-      model = await loader!.load(filePath)
+      const filePath = helpers.config.atCwdFullPath(model);
+      model = await loader!.load(filePath);
     }
 
     if (model) {
-      return model
+      return model;
     }
 
-    return previousModel
-  }
+    return previousModel;
+  };
+
+  const findContainerPosition = (
+    container: string,
+    searchText: string | undefined,
+    searchExpr: string | undefined,
+    logPrefix: string
+  ): [number, number] => {
+    let index = -1
+    let length = -1
+    let regexp = searchExpr ? new RegExp(searchExpr) : undefined
+
+    if (regexp) {
+      const match = container.match(regexp)
+  
+      if (match) {
+        index = match.index ?? -1
+        length = match[0].length
+      }
+    } else if (searchText) {
+      index = container.indexOf(searchText)
+      length = searchText.length
+    } else {
+      throw tracedError(console, `${logPrefix}: Snippet steps have to specify both start and end boundaries`)
+    }
+    
+    if (index === -1) {
+      throw tracedError(console, `${logPrefix}: Didn't found the boundaries for snippet insertion`)
+    }
+
+    // Look for line start and end
+    while (index + length + 1 < container.length) {
+      if (container[index + length + 1] == '\r') {
+        if (index + length + 2 < container.length && container[index + length + 2] == '\n') {
+          length += 2
+          break
+        } else {
+          length += 1
+          break
+        }
+      } else if (container[index + length + 1] == '\n') {
+        length += 1
+        break
+      } else {
+        length += 1
+      }
+    }
+
+    while (index >= 1) {
+      if (container[index - 1] === '\r' || container[index - 1] === '\n') {
+        break
+      } else {
+        index -= 1
+        length += 1
+      }
+    }
+
+    return [index, length]
+  };
 
   const copyProcessor = async (
     step: CopyCommandStep,
@@ -460,24 +537,35 @@ export function createGeneratorsSystem(
     opts: RunGeneratorOptions,
     runtime: GeneratorRuntime
   ) => {
-    const prefix = `copyProcessor${step.stepName ? `[${step.stepName}]` : ''}`
-    const fromFullPath = helpers.config.atTemplatesPath(context.generatorDescriptor.fullPath, step.from)
-    const toPath = joinPaths(context.generatorDescriptor.outDir, step.to)
-    
-    if (!canOverwrite(step.overwrite, context, opts) && await runtime.fileExists(toPath)) {
-      console.trace(`${prefix}: File '${toPath}' already exists and 'override' is set to 'false'`)
-      return
+    const prefix = `copyProcessor${step.stepName ? `[${step.stepName}]` : ''}`;
+    const fromFullPath = helpers.config.atTemplatesPath(
+      context.generatorDescriptor.fullPath,
+      step.from
+    );
+    const toPath = joinPaths(context.generatorDescriptor.outDir, step.to);
+
+    if (
+      !canOverwrite(step.overwrite, context, opts) &&
+      (await runtime.fileExists(toPath))
+    ) {
+      console.trace(
+        `${prefix}: File '${toPath}' already exists and 'override' is set to 'false'`
+      );
+      return;
     }
 
-    console.trace(`${prefix}: Copying from '${fromFullPath}' to '${toPath}'`)
+    console.trace(`${prefix}: Copying from '${fromFullPath}' to '${toPath}'`);
 
-    const content = await fsReadFileContent(fromFullPath)
+    const content = await fsReadFileContent(fromFullPath);
 
     if (content === undefined) {
-      throw tracedError(console, `${prefix}: Source file '${fromFullPath}' does not exists`)
+      throw tracedError(
+        console,
+        `${prefix}: Source file '${fromFullPath}' does not exists`
+      );
     }
 
-    runtime.writeFile(toPath, content)
+    runtime.writeFile(toPath, content);
   };
 
   const fileProcessor = async (
@@ -486,38 +574,121 @@ export function createGeneratorsSystem(
     opts: RunGeneratorOptions,
     runtime: GeneratorRuntime
   ) => {
-    const prefix = `fileProcessor${step.stepName ? `[${step.stepName}]` : ''}`
-    const fromFullPath = helpers.config.atTemplatesPath(context.generatorDescriptor.fullPath, step.from)
-    const toPath = joinPaths(context.generatorDescriptor.outDir, step.to)
-    
-    if (!canOverwrite(step.overwrite, context, opts) && await runtime.fileExists(toPath)) {
-      console.trace(`${prefix}: File '${toPath}' already exists and 'override' is set to 'false'`)
-      return
+    const prefix = `fileProcessor${step.stepName ? `[${step.stepName}]` : ''}`;
+    const fromFullPath = helpers.config.atTemplatesPath(
+      context.generatorDescriptor.fullPath,
+      step.from
+    );
+    const toPath = joinPaths(context.generatorDescriptor.outDir, step.to);
+
+    if (
+      !canOverwrite(step.overwrite, context, opts) &&
+      (await runtime.fileExists(toPath))
+    ) {
+      console.trace(
+        `${prefix}: File '${toPath}' already exists and 'override' is set to 'false'`
+      );
+      return;
     }
 
-    console.trace(`${prefix}: Generating template from '${fromFullPath}' to '${toPath}'`)
+    console.trace(
+      `${prefix}: Generating template from '${fromFullPath}' to '${toPath}'`
+    );
 
-    const templateContent = await fsReadFileContent(fromFullPath)
+    const templateContent = await fsReadFileContent(fromFullPath);
 
     if (templateContent === undefined) {
-      throw tracedError(console, `${prefix}: Source file '${fromFullPath}' does not exists`)
+      throw tracedError(
+        console,
+        `${prefix}: Source file '${fromFullPath}' does not exists`
+      );
     }
 
-    const engine = searchTemplateEngine(step.engine, context)
+    const engine = searchTemplateEngine(step.engine, context);
 
-    const content = await engine.execute(templateContent, context)
+    const content = await engine.execute(templateContent, context);
+
+    runtime.writeFile(toPath, content);
+  };
+
+  const snippetProcessor = async (
+    step: SnippetCommandStep,
+    context: RunCommandContext,
+    _opts: RunGeneratorOptions,
+    runtime: GeneratorRuntime
+  ) => {
+    const prefix = `snippetProcessor${
+      step.stepName ? `[${step.stepName}]` : ''
+    }`;
+    const fromFullPath = helpers.config.atTemplatesPath(
+      context.generatorDescriptor.fullPath,
+      step.from
+    );
+    const toPath = joinPaths(context.generatorDescriptor.outDir, step.to);
+
+    // if (!canOverwrite(step.overwrite, context, opts) && await runtime.fileExists(toPath)) {
+    //   console.trace(`${prefix}: File '${toPath}' already exists and 'override' is set to 'false'`)
+    //   return
+    // }
+
+    console.trace(
+      `${prefix}: Generating snippet from '${fromFullPath}' to '${toPath}'`
+    );
+
+    const currentContent = await runtime.readFile(toPath);
+
+    if (currentContent === undefined) {
+      throw tracedError(
+        console,
+        `${prefix}: File '${toPath}' does not exists, and snippets require to be inserted in existing files. Add a previous step to create the container file previous to the snippet step.`
+      );
+    }
+
+    const [startIndex, startLength] = findContainerPosition(currentContent, step.start, step.startRegExp, prefix);
+    const [endIndex] = findContainerPosition(currentContent, step.end, step.endRegExp, prefix);
+
+    if (endIndex < startIndex + startLength) {
+      throw tracedError(
+        console,
+        `${prefix}: Found snippet boundaries in the wrong position`
+      );
+    }
+
+    const templateContent = await fsReadFileContent(fromFullPath);
+
+    if (templateContent === undefined) {
+      throw tracedError(
+        console,
+        `${prefix}: Source file '${fromFullPath}' does not exists`
+      );
+    }
+
+    const engine = searchTemplateEngine(step.engine, context);
+
+    const snippet = await engine.execute(templateContent, context);
+
+    // Insert snippet into currentContent
+
+    const startContent = currentContent.substring(0, startIndex + startLength)
+    const endContent = currentContent.substring(endIndex)
+    const content = `${startContent}${snippet}${endContent}`
 
     runtime.writeFile(toPath, content)
   };
 
   const stepProcessors: Record<
     string,
-    | ((step: any, context: RunCommandContext, opts: RunGeneratorOptions, runtime: GeneratorRuntime) => Promise<void>)
+    | ((
+        step: any,
+        context: RunCommandContext,
+        opts: RunGeneratorOptions,
+        runtime: GeneratorRuntime
+      ) => Promise<void>)
     | undefined
   > = {
     copy: copyProcessor,
     file: fileProcessor,
-    // snippet: snippetProcessor,
+    snippet: snippetProcessor,
     // generator: generatorProcessor,
   };
 
@@ -554,7 +725,10 @@ export function createGeneratorsSystem(
     }
 
     if (generatorDescriptor.data.requireName && !opts.name) {
-      throw tracedError(console, `<name> parameter is required for this generator to run`)
+      throw tracedError(
+        console,
+        `<name> parameter is required for this generator to run`
+      );
     }
 
     var commandDescriptor = generatorDescriptor.commands.find(
@@ -576,17 +750,31 @@ export function createGeneratorsSystem(
     }
 
     if (commandDescriptor.data.requireName && !opts.name) {
-      throw tracedError(console, `<name> parameter is required for this command to run`)
+      throw tracedError(
+        console,
+        `<name> parameter is required for this command to run`
+      );
     }
 
-    let model: any = await loadModel(opts.model, opts.modelFormat, opts.jsonPath, parentContext?.model ?? undefined);
+    let model: any = await loadModel(
+      opts.model,
+      opts.modelFormat,
+      opts.jsonPath,
+      parentContext?.model ?? undefined
+    );
 
     if (generatorDescriptor.data.requireModel && !model) {
-      throw tracedError(console, `Model is required for this generator to run. Use option --model for it.`)
+      throw tracedError(
+        console,
+        `Model is required for this generator to run. Use option --model for it.`
+      );
     }
 
     if (commandDescriptor.data.requireModel && !model) {
-      throw tracedError(console, `Model is required for this command to run. Use option --model for it.`)
+      throw tracedError(
+        console,
+        `Model is required for this command to run. Use option --model for it.`
+      );
     }
 
     const context: RunCommandContext = {
@@ -609,6 +797,10 @@ export function createGeneratorsSystem(
     // console.trace('runResult', runResult);
 
     for (const step of runResult?.steps ?? []) {
+      if (step.skip) {
+        continue
+      }
+
       const stepProcessor = stepProcessors[step.type];
 
       if (!stepProcessor) {
@@ -619,83 +811,118 @@ export function createGeneratorsSystem(
       }
 
       // TODO: Create context specific for step?
-      await stepProcessor(step, context, opts, runtime)
+      await stepProcessor(step, context, opts, runtime);
     }
   };
 
-  const createRuntime = () => {
-    const fileMap = new Map<string, string>()
+  const createRuntime = (opts: RunGeneratorOptions) => {
+    const fileMap = new Map<string, string>();
 
     const fileExists = async (filePath: string) => {
-      const normalizedPath = path.normalize(filePath)
+      const normalizedPath = path.normalize(filePath);
 
       if (fileMap.has(normalizedPath)) {
-        return true
+        return true;
       }
 
-      return await fsExistsAsFile(helpers.config.atCwdFullPath(normalizedPath))
-    }
+      return await fsExistsAsFile(helpers.config.atCwdFullPath(normalizedPath));
+    };
 
     const writeFile = (filePath: string, content: string) => {
-      const normalizedPath = path.normalize(filePath)
+      const normalizedPath = path.normalize(filePath);
 
-      console.trace(`runtime:writeFile '${normalizedPath}' with ${content.length} bytes`)
+      console.trace(
+        `runtime:writeFile '${normalizedPath}' with ${content.length} bytes`
+      );
 
-      fileMap.set(normalizedPath, content)
-    }
+      fileMap.set(normalizedPath, content);
+    };
 
     const readFile = async (filePath: string) => {
-      const normalizedPath = path.normalize(filePath)
+      const normalizedPath = path.normalize(filePath);
 
-      const content = fileMap.get(normalizedPath)
+      const content = fileMap.get(normalizedPath);
       if (content !== undefined) {
-        console.trace(`runtime:readFile '${normalizedPath}' from FILE MAP with ${content.length} bytes`)
-        return content
+        console.trace(
+          `runtime:readFile '${normalizedPath}' from FILE MAP with ${content.length} bytes`
+        );
+        return content;
       }
 
-      const fileContent = await fsReadFileContent(helpers.config.atCwdFullPath(normalizedPath))
+      const fileContent = await fsReadFileContent(
+        helpers.config.atCwdFullPath(normalizedPath)
+      );
 
       if (fileContent) {
-        console.trace(`runtime:readFile '${normalizedPath}' from CWD with '${shorten(fileContent, 40)}'`)
+        console.trace(
+          `runtime:readFile '${normalizedPath}' from CWD with '${shorten(
+            fileContent,
+            40
+          )}'`
+        );
       } else {
-        console.trace(`runtime:readFile '${normalizedPath}' NOT FOUND`)
+        console.trace(`runtime:readFile '${normalizedPath}' NOT FOUND`);
       }
 
-      return fileContent
-    }
+      return fileContent;
+    };
 
     const execute = async () => {
+      const toStdOut = !!opts.stdout;
+      const toFiles = !opts.dryRun;
+
       for (const [normalizedPath, content] of fileMap.entries()) {
         const fullPath = helpers.config.atCwdFullPath(normalizedPath);
+        const alreadyExists = await fsExistsAsFile(fullPath);
 
-        await fs.ensureDir(path.dirname(fullPath))
+        if (alreadyExists) {
+          console.info(
+            `${chalk.yellowBright('Modified')} file '${chalk.cyanBright(
+              normalizedPath
+            )}' with ${content.length} bytes`
+          );
+        } else {
+          console.info(
+            `${chalk.greenBright('Added')} file '${chalk.cyanBright(
+              normalizedPath
+            )}' with ${content.length} bytes`
+          );
+        }
 
-        await fsWriteFileContent(
-          fullPath,
-          content)
+        if (toFiles) {
+          await fs.ensureDir(path.dirname(fullPath));
 
-        console.trace(`runtime:execute Written '${normalizedPath}' with ${content.length} bytes`)
+          await fsWriteFileContent(fullPath, content);
+
+          console.trace(
+            `runtime:execute Written '${normalizedPath}' with ${content.length} bytes`
+          );
+        }
+
+        if (toStdOut) {
+          global.console.log('----------------------------------------------------')
+          global.console.log(content)
+          global.console.log('----------------------------------------------------')
+        }
       }
-    }
+    };
 
     const runtime: GeneratorRuntime = {
       fileExists,
       readFile,
       writeFile,
       execute,
-    }
+    };
 
-    return runtime
-  }
+    return runtime;
+  };
 
   const runGenerator = async (opts: RunGeneratorOptions) => {
-    const runtime = createRuntime()
-    
+    const runtime = createRuntime(opts);
+
     await processGenerator(null, opts, runtime);
 
-    if (!opts.dryRun) {
-      await runtime.execute()
-    }
+    await runtime.execute();
   };
 
   const genSystem: IGeneratorsSystem = {

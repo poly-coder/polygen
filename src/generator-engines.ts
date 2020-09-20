@@ -15,6 +15,7 @@ export interface GeneratorEngine {
     readonly name: string;
     readonly extensions: readonly string[];
     readonly enumType: GeneratorEngineEnum;
+    // TODO: Make execute receive the path instead of the content. Some engines allow to include/import and it needs actual paths
     readonly execute: (template: string, context: any) => Promise<string>
 }
 

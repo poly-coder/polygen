@@ -1,6 +1,11 @@
 import chalk from "chalk"
 import { Consola } from "consola"
 import ejs from "ejs";
+import handlebars from "handlebars";
+import { Liquid } from "liquidjs";
+import mustache from "mustache";
+import nunjucks from "nunjucks";
+import pug from "pug";
 import { tracedError } from "./logging"
 
 export enum GeneratorEngineEnum {
@@ -26,37 +31,52 @@ const GENERATOR_ENGINES: GeneratorEngine[] = [
         name: 'ejs',
         extensions: ['.ejs'],
         enumType: GeneratorEngineEnum.EJS,
-        execute: executeEJSTemplate
+        execute: async (template, context) => {
+            return ejs.render(template, context)
+        }
     },
     {
         name: 'handlebars',
         extensions: ['.hbs', '.handlebars'],
         enumType: GeneratorEngineEnum.Handlebars,
-        execute: async () => 'Not Implemented!!!!!'
+        execute: async (template, context) => {
+            const processor = handlebars.compile(template)
+            return processor(context)
+        }
     },
     {
         name: 'liquid',
         extensions: ['.liquid'],
         enumType: GeneratorEngineEnum.Liquid,
-        execute: async () => 'Not Implemented!!!!!'
+        execute: async (template, context) => {
+            const engine = new Liquid()
+            return await engine.parseAndRender(template, context)
+        }
     },
     {
         name: 'mustache',
         extensions: ['.mustache'],
         enumType: GeneratorEngineEnum.Mustache,
-        execute: async () => 'Not Implemented!!!!!'
+        execute: async (template, context) => {
+            return await mustache.render(template, context)
+        }
     },
     {
         name: 'nunjucks',
         extensions: ['.njk', '.nunjucks'],
         enumType: GeneratorEngineEnum.Nunjucks,
-        execute: async () => 'Not Implemented!!!!!'
+        execute: async (template, context) => {
+            return nunjucks.renderString(template, context)
+        }
     },
     {
         name: 'pug',
         extensions: ['.pug'],
         enumType: GeneratorEngineEnum.Pug,
-        execute: async () => 'Not Implemented!!!!!'
+        execute: async (template, context) => {
+            const engine = pug.compile(template)
+            return await engine(context)
+        }
     },
 ]
 
@@ -80,8 +100,4 @@ export function findGeneratorEngine(generatorName: string | undefined, console: 
     }
 
     throw tracedError(console, `Invalid generator engine: '${chalk.redBright(generatorName)}'. Use one of ${getGeneratorNames()}`)
-}
-
-async function executeEJSTemplate(template: string, context: any) {
-    return ejs.render(template, context)
 }

@@ -1,0 +1,18 @@
+{
+    "details": {
+        "version": "1",
+        "description": "Description of generator <%= name %>"
+    },
+    "engine": "ejs",
+    "outDir" : ".",
+    "commands": [
+        {
+            "name": "<%= h.config.defaultCommand %>",
+            "js": "<%= h.config.defaultCommand %>.js",
+            "details": {
+                "version": "1",
+                "description": "Description of command '<%= h.config.defaultCommand %>'"
+            }
+        }
+    ]
+}

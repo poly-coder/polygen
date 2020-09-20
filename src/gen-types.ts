@@ -42,9 +42,9 @@ export interface GeneratorSystemConfig {
      */
     readonly cwd: string;
     /**
-     * generatorAssets folder where initializer generator is located.
+     * initAssets folder where initializer generator is located.
      */
-    readonly generatorAssets: string;
+    readonly initAssets: string;
 }
 
 export interface ListGeneratorsOptions {
@@ -60,7 +60,7 @@ export interface InitializeOptions {
     readonly templatesFolder?: string;
     readonly defaultCommand?: string;
     readonly cwd?: string;
-    readonly generatorAssets?: string;
+    readonly initAssets?: string;
 }
 
 export interface RunGeneratorOptions {
@@ -73,13 +73,11 @@ export interface RunGeneratorOptions {
     readonly phases?: string;
     readonly dryRun: boolean;
     readonly overwrite?: boolean;
-    readonly backup?: string;
 }
 
 export interface RunCommandResult {
     readonly steps: ReadonlyArray<CommandStep>;
 }
-
 
 export type RunCommandFunc = (context: RunCommandContext) => Promise<RunCommandResult | null>;
 
@@ -87,6 +85,7 @@ export interface CommandDescriptorData {
     readonly name: string;
     readonly js: string;
     readonly details?: any;
+    readonly overwrite?: boolean;
 }
 
 export interface CommandDescriptor {
@@ -98,6 +97,7 @@ export interface CommandDescriptor {
 export interface GeneratorDescriptorData {
     readonly commands: ReadonlyArray<CommandDescriptorData>;
     readonly details?: any;
+    readonly overwrite?: boolean;
     readonly outDir?: string;
     readonly engine?: string;
 }
@@ -165,4 +165,11 @@ export interface RunCommandContext {
     //  * Current step descriptor
     //  */
     // readonly stepDescriptor: CommandStepDescriptor;
+}
+
+export interface GeneratorRuntime {
+    readonly fileExists: (filePath: string) => Promise<boolean>;
+    readonly readFile: (filePath: string) => Promise<string | null>;
+    readonly writeFile: (filePath: string, content: string) => void;
+    readonly execute: () => Promise<void>;
 }

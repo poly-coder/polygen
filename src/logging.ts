@@ -90,3 +90,17 @@ export function tracedError(console: Consola, message: string) {
     console.error(message);
     return new Error(message)
 }
+
+export function shorten(text: string, maxLength: number, ellipsis: string = '...', writeLength: boolean = true) {
+    if (!text || text.length <= maxLength) {
+        return text
+    }
+
+    const lengthToWrite = writeLength ? ` [${text.length} chars]` : ''
+
+    if (ellipsis.length >= maxLength) {
+        return ellipsis.substring(0, maxLength) + lengthToWrite
+    }
+
+    return text.substring(0, maxLength - ellipsis.length) + ellipsis + lengthToWrite
+}

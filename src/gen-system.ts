@@ -16,6 +16,7 @@ import {
   CommandDescriptor,
   GeneratorDescriptor,
   GeneratorDescriptorData,
+  GeneratorRuntime,
   GeneratorSystemConfig,
   IGeneratorsSystem,
   InitializeOptions,
@@ -34,16 +35,15 @@ import {
   pcgenConfigFileNames,
   replaceVariables,
 } from './gen-configuration';
-import { tracedError } from './logging';
-import { findGeneratorEngine } from './generator-engines';
-import { CopyCommandStep } from './gen-steps';
+import { shorten, tracedError } from './logging';
+import { findGeneratorEngine, GeneratorEngine } from './generator-engines';
+import { CopyCommandStep, FileCommandStep } from './gen-steps';
 import path from 'path';
 
 export function createGeneratorsSystem(
   config: GeneratorSystemConfig,
   console: Consola
 ): IGeneratorsSystem {
-  // TODO: Define PCGEN_GENERATORS_HOME env var. Multiple sources?
   // TODO: Look for parent folders when not found?
 
   const helpers = {
@@ -59,7 +59,7 @@ export function createGeneratorsSystem(
   // console.trace('helpers', helpers);
 
   const variables = extractVariables(helpers);
-  console.trace('variables', variables);
+  // console.trace('variables', variables);
 
   const isInitialized = async () => {
     for (const fileName of pcgenConfigFileNames) {
@@ -114,8 +114,8 @@ export function createGeneratorsSystem(
       newConfig.cwd = options.cwd;
     }
 
-    if (!!options.generatorAssets) {
-      newConfig.generatorAssets = options.generatorAssets;
+    if (!!options.initAssets) {
+      newConfig.initAssets = options.initAssets;
     }
 
     return createGeneratorSystemConfig(newConfig);
@@ -128,10 +128,15 @@ export function createGeneratorsSystem(
       const newConfig = createInitializeOptions(options);
       const configHelpers = createConfigHelpers(newConfig);
 
-      const source = newConfig.generatorAssets;
+      const source = joinPaths(newConfig.initAssets, 'generator');
       const target = configHelpers.atPcgenFullPath(newConfig.generatorFolder);
       fs.copy(source, target);
       console.trace(`initialize: Copied folder "${source}" to "${target}"`);
+
+      const sourceGitIgnore = joinPaths(newConfig.initAssets, '_gitignore');
+      const targetGitIgnore = configHelpers.atPcgenFullPath('.gitignore');
+      fs.copy(sourceGitIgnore, targetGitIgnore);
+      console.trace(`initialize: Copied file "${sourceGitIgnore}" to "${targetGitIgnore}"`);
 
       const configPath = configHelpers.atCwdFullPath(pcgenConfigFileNames[0]);
       const jsonContent = JSON.stringify(newConfig, null, 4);
@@ -199,22 +204,15 @@ export function createGeneratorsSystem(
       helpers.config.baseFullPath,
       ...config.searchPaths,
     ]) {
-      console.trace(
-        `locateGenerator: Locating generator '${generatorName}' at path '${searchPath}'`
-      );
-
       const searchFullPath = helpers.config.atCwdFullPath(searchPath);
       console.trace(
-        `locateGenerator: Locating generator '${generatorName}' at full path '${searchFullPath}'`
+        `locateGenerator: Locating generator '${generatorName}' at path '${searchFullPath}'`
       );
 
       const generatorFullPath = joinPaths(
         searchFullPath,
         config.pcgenFolder,
         generatorName
-      );
-      console.trace(
-        `locateGenerator: Expected generator '${generatorName}' full path would be at '${generatorFullPath}'`
       );
 
       if (await fsExistsAsDirectory(generatorFullPath)) {
@@ -234,7 +232,7 @@ export function createGeneratorsSystem(
 
     console.trace(
       chalk.redBright(
-        `locateGenerator: Generator '${generatorName}' not found at anywhere`
+        `locateGenerator: Generator '${generatorName}' not found anywhere`
       )
     );
     return undefined;
@@ -249,16 +247,11 @@ export function createGeneratorsSystem(
       helpers.config.baseFullPath,
       ...config.searchPaths,
     ]) {
-      console.trace(`searchGeneratorNames: Searching at path '${searchPath}'`);
-
       const searchFullPath = helpers.config.atCwdFullPath(searchPath);
-      console.trace(
-        `searchGeneratorNames: Searching at full path '${searchFullPath}'`
-      );
-
       const pcgenFullPath = joinPaths(searchFullPath, config.pcgenFolder);
+
       console.trace(
-        `searchGeneratorNames: Searching at pcgen path '${pcgenFullPath}'`
+        `searchGeneratorNames: Searching at path '${pcgenFullPath}'`
       );
 
       const directoryNames = await fsListDirectories(pcgenFullPath);
@@ -323,7 +316,7 @@ export function createGeneratorsSystem(
     generatorName: string,
     generatorFullPath: string
   ): GeneratorDescriptor => {
-    const outDir = data.outDir ? helpers.config.atCwdFullPath(data.outDir) : helpers.config.cwd
+    const outDir = path.relative(helpers.config.cwd, data.outDir ? helpers.config.atCwdFullPath(data.outDir) : helpers.config.cwd)
 
     const commands = data.commands.map((cmdData) => {
       const command: CommandDescriptor = {
@@ -381,38 +374,129 @@ export function createGeneratorsSystem(
     return await searchGeneratorNames(options.name);
   };
 
+  const canOverwrite = (
+    localOverwrite: boolean | undefined,
+    context: RunCommandContext,
+    opts: RunGeneratorOptions,
+  ) => {
+    // If the user says so, it is what it is
+    if (opts.overwrite !== undefined) {
+      return opts.overwrite;
+    }
+
+    if (localOverwrite !== undefined) {
+      return localOverwrite
+    }
+
+    const commandOverwrite = context.commandDescriptor.data.overwrite
+    if (commandOverwrite !== undefined) {
+      return commandOverwrite
+    }
+
+    const generatorOverwrite = context.generatorDescriptor.data.overwrite
+    if (generatorOverwrite !== undefined) {
+      return generatorOverwrite
+    }
+
+    // Do not overwrite by default
+    return false
+  }
+
+  const searchTemplateEngine = (localEngine: string | undefined, context: RunCommandContext): GeneratorEngine => {
+    let engine = findGeneratorEngine(localEngine, console)
+
+    if (engine) {
+      return engine
+    }
+
+    engine = context.generatorDescriptor.engine
+
+    if (engine) {
+      return engine
+    }
+
+    engine = findGeneratorEngine('ejs', console)
+
+    if (engine) {
+      return engine
+    }
+
+    throw tracedError(console, 'There are no template engines available')
+  }
+
   const copyProcessor = async (
     step: CopyCommandStep,
     context: RunCommandContext,
-    _opts: RunGeneratorOptions
+    opts: RunGeneratorOptions,
+    runtime: GeneratorRuntime
   ) => {
-    // TODO: Add RunCommandRuntime type to hold all changes before applying them all
+    const prefix = `copyProcessor${step.stepName ? `[${step.stepName}]` : ''}`
     const fromFullPath = helpers.config.atTemplatesPath(context.generatorDescriptor.fullPath, step.from)
-    const toFullPath = joinPaths(context.generatorDescriptor.outDir, step.to)
+    const toPath = joinPaths(context.generatorDescriptor.outDir, step.to)
+    
+    if (!canOverwrite(step.overwrite, context, opts) && await runtime.fileExists(toPath)) {
+      console.trace(`${prefix}: File '${toPath}' already exists and 'override' is set to 'false'`)
+      return
+    }
 
-    console.trace(`copyProcessor: Copying from '${fromFullPath}' to '${toFullPath}'`)
+    console.trace(`${prefix}: Copying from '${fromFullPath}' to '${toPath}'`)
 
-    await fs.ensureDir(path.dirname(toFullPath))
+    const content = await fsReadFileContent(fromFullPath)
 
-    await fs.copyFile(fromFullPath, toFullPath)
+    if (content === null) {
+      throw tracedError(console, `${prefix}: Source file '${fromFullPath}' does not exists`)
+    }
+
+    runtime.writeFile(toPath, content)
+  };
+
+  const fileProcessor = async (
+    step: FileCommandStep,
+    context: RunCommandContext,
+    opts: RunGeneratorOptions,
+    runtime: GeneratorRuntime
+  ) => {
+    const prefix = `fileProcessor${step.stepName ? `[${step.stepName}]` : ''}`
+    const fromFullPath = helpers.config.atTemplatesPath(context.generatorDescriptor.fullPath, step.from)
+    const toPath = joinPaths(context.generatorDescriptor.outDir, step.to)
+    
+    if (!canOverwrite(step.overwrite, context, opts) && await runtime.fileExists(toPath)) {
+      console.trace(`${prefix}: File '${toPath}' already exists and 'override' is set to 'false'`)
+      return
+    }
+
+    console.trace(`${prefix}: Generating template from '${fromFullPath}' to '${toPath}'`)
+
+    const templateContent = await fsReadFileContent(fromFullPath)
+
+    if (templateContent === null) {
+      throw tracedError(console, `${prefix}: Source file '${fromFullPath}' does not exists`)
+    }
+
+    const engine = searchTemplateEngine(step.engine, context)
+
+    const content = await engine.execute(templateContent, context)
+
+    runtime.writeFile(toPath, content)
   };
 
   const stepProcessors: Record<
     string,
-    | ((step: any, context: RunCommandContext, opts: RunGeneratorOptions) => Promise<void>)
+    | ((step: any, context: RunCommandContext, opts: RunGeneratorOptions, runtime: GeneratorRuntime) => Promise<void>)
     | undefined
   > = {
     copy: copyProcessor,
-    // file: fileProcessor,
+    file: fileProcessor,
     // snippet: snippetProcessor,
     // generator: generatorProcessor,
   };
 
   const processGenerator = async (
     parentContext: RunCommandContext | null,
-    opts: RunGeneratorOptions
+    opts: RunGeneratorOptions,
+    runtime: GeneratorRuntime
   ) => {
-    console.trace('processGenerator: opts', opts);
+    // console.trace('processGenerator: opts', opts);
 
     let [generator, command] = opts.generator.split(':');
 
@@ -486,12 +570,83 @@ export function createGeneratorsSystem(
       }
 
       // TODO: Create context specific for step?
-      await stepProcessor(step, context, opts)
+      await stepProcessor(step, context, opts, runtime)
     }
   };
 
+  const createRuntime = () => {
+    const fileMap = new Map<string, string>()
+
+    const fileExists = async (filePath: string) => {
+      const normalizedPath = path.normalize(filePath)
+
+      if (fileMap.has(normalizedPath)) {
+        return true
+      }
+
+      return await fsExistsAsFile(helpers.config.atCwdFullPath(normalizedPath))
+    }
+
+    const writeFile = (filePath: string, content: string) => {
+      const normalizedPath = path.normalize(filePath)
+
+      console.trace(`runtime:writeFile '${normalizedPath}' with ${content.length} bytes`)
+
+      fileMap.set(normalizedPath, content)
+    }
+
+    const readFile = async (filePath: string) => {
+      const normalizedPath = path.normalize(filePath)
+
+      const content = fileMap.get(normalizedPath)
+      if (content !== undefined) {
+        console.trace(`runtime:readFile '${normalizedPath}' from FILE MAP with ${content.length} bytes`)
+        return content
+      }
+
+      const fileContent = await fsReadFileContent(helpers.config.atCwdFullPath(normalizedPath))
+
+      if (fileContent) {
+        console.trace(`runtime:readFile '${normalizedPath}' from CWD with '${shorten(fileContent, 40)}'`)
+      } else {
+        console.trace(`runtime:readFile '${normalizedPath}' NOT FOUND`)
+      }
+
+      return fileContent
+    }
+
+    const execute = async () => {
+      for (const [normalizedPath, content] of fileMap.entries()) {
+        const fullPath = helpers.config.atCwdFullPath(normalizedPath);
+
+        await fs.ensureDir(path.dirname(fullPath))
+
+        await fsWriteFileContent(
+          fullPath,
+          content)
+
+        console.trace(`runtime:execute Written '${normalizedPath}' with ${content.length} bytes`)
+      }
+    }
+
+    const runtime: GeneratorRuntime = {
+      fileExists,
+      readFile,
+      writeFile,
+      execute,
+    }
+
+    return runtime
+  }
+
   const runGenerator = async (opts: RunGeneratorOptions) => {
-    await processGenerator(null, opts);
+    const runtime = createRuntime()
+    
+    await processGenerator(null, opts, runtime);
+
+    if (!opts.dryRun) {
+      await runtime.execute()
+    }
   };
 
   const genSystem: IGeneratorsSystem = {

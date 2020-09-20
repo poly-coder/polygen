@@ -13,9 +13,9 @@ const defaultGeneratorSystemConfig: GeneratorSystemConfig = {
   templatesFolder: 'templates',
   defaultCommand: 'new',
   cwd: '.',
-  generatorAssets: path.relative(
+  initAssets: path.relative(
     '.',
-    joinPaths(__dirname, '../assets/generator')
+    joinPaths(__dirname, '../assets')
   ),
 };
 
@@ -107,7 +107,7 @@ export function createConfigHelpers(config: GeneratorSystemConfig) {
     commandsFolder: config.commandsFolder,
     templatesFolder: config.templatesFolder,
     defaultCommand: config.defaultCommand,
-    generatorAssets: config.generatorAssets,
+    initAssets: config.initAssets,
 
     // Functions
     atCwdFullPath,

@@ -9,24 +9,14 @@ module.exports = {
      * - generatorDescriptor; Describes the current generator. Do not use unless you know what you are doing
      * - commandDescriptor; Describes the current command. Do not use unless you know what you are doing
      */
-    run: function({name, h}) {
+    run: function({name}) {
         return {
             steps: [
                 {
                     type: "file",
-                    from: "generator.ejs",
-                    to: `${name}/${name}.json`,
-                },
-                {
-                    type: "file",
-                    from: "new.ejs",
-                    to: `${name}/${h.config.commandsFolder}/${h.config.defaultCommand}.js`,
-                },
-                {
-                    type: "file",
                     from: "sample.ejs",
-                    to: `${name}/${h.config.templatesFolder}/sample.ejs`,
-                },
+                    to: `${name}.js`,
+                }
             ]
         }
     }

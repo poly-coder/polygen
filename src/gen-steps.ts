@@ -19,10 +19,6 @@ export interface FileBasedCommandStep extends CommonCommandStep {
      * The path to the generated file. 
      */
     readonly to: string;
-    /**
-     * A file extension, like '.bak', to indicate thet you want to backup files before overwriting them. Previous bak files are overwriten
-     */
-    readonly backup?: string;
 }
 
 export interface CopyCommandStep extends FileBasedCommandStep {
@@ -131,10 +127,6 @@ export interface GeneratorCommandStep extends CommonCommandStep {
      * Indicates the default overwrite mode. It cannot override the current overwrite setting
      */
     readonly overwrite?: boolean;
-    /**
-     * Indicates the bakups extensions. If left blank the current one is used, if any.
-     */
-    readonly backup?: string;
 }
 
 export type CommandStep = CopyCommandStep | FileCommandStep | SnippetCommandStep | GeneratorCommandStep

@@ -86,6 +86,8 @@ export interface CommandDescriptorData {
     readonly js: string;
     readonly details?: any;
     readonly overwrite?: boolean;
+    readonly requireName?: boolean;
+    readonly requireModel?: boolean;
 }
 
 export interface CommandDescriptor {
@@ -100,6 +102,8 @@ export interface GeneratorDescriptorData {
     readonly overwrite?: boolean;
     readonly outDir?: string;
     readonly engine?: string;
+    readonly requireName?: boolean;
+    readonly requireModel?: boolean;
 }
 
 export interface GeneratorDescriptor {

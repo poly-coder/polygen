@@ -553,6 +553,10 @@ export function createGeneratorsSystem(
       );
     }
 
+    if (generatorDescriptor.data.requireName && !opts.name) {
+      throw tracedError(console, `<name> parameter is required for this generator to run`)
+    }
+
     var commandDescriptor = generatorDescriptor.commands.find(
       (c) => c.data.name == command
     );
@@ -571,9 +575,19 @@ export function createGeneratorsSystem(
       return;
     }
 
+    if (commandDescriptor.data.requireName && !opts.name) {
+      throw tracedError(console, `<name> parameter is required for this command to run`)
+    }
+
     let model: any = await loadModel(opts.model, opts.modelFormat, opts.jsonPath, parentContext?.model ?? undefined);
 
-    console.trace('model', model)
+    if (generatorDescriptor.data.requireModel && !model) {
+      throw tracedError(console, `Model is required for this generator to run. Use option --model for it.`)
+    }
+
+    if (commandDescriptor.data.requireModel && !model) {
+      throw tracedError(console, `Model is required for this command to run. Use option --model for it.`)
+    }
 
     const context: RunCommandContext = {
       parent: parentContext,

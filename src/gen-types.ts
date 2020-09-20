@@ -169,7 +169,7 @@ export interface RunCommandContext {
 
 export interface GeneratorRuntime {
     readonly fileExists: (filePath: string) => Promise<boolean>;
-    readonly readFile: (filePath: string) => Promise<string | null>;
+    readonly readFile: (filePath: string) => Promise<string | undefined>;
     readonly writeFile: (filePath: string, content: string) => void;
     readonly execute: () => Promise<void>;
 }

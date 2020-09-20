@@ -1,11 +1,5 @@
 import chalk from "chalk"
 import { Consola } from "consola"
-import ejs from "ejs";
-import handlebars from "handlebars";
-import { Liquid } from "liquidjs";
-import mustache from "mustache";
-import nunjucks from "nunjucks";
-import pug from "pug";
 import { tracedError } from "./logging"
 
 export enum GeneratorEngineEnum {
@@ -32,6 +26,7 @@ const GENERATOR_ENGINES: GeneratorEngine[] = [
         extensions: ['.ejs'],
         enumType: GeneratorEngineEnum.EJS,
         execute: async (template, context) => {
+            const ejs = await import('ejs')
             return ejs.render(template, context)
         }
     },
@@ -40,8 +35,9 @@ const GENERATOR_ENGINES: GeneratorEngine[] = [
         extensions: ['.hbs', '.handlebars'],
         enumType: GeneratorEngineEnum.Handlebars,
         execute: async (template, context) => {
-            const processor = handlebars.compile(template)
-            return processor(context)
+            const handlebars = await import('handlebars')
+            const compiled = handlebars.compile(template)
+            return compiled(context)
         }
     },
     {
@@ -49,7 +45,8 @@ const GENERATOR_ENGINES: GeneratorEngine[] = [
         extensions: ['.liquid'],
         enumType: GeneratorEngineEnum.Liquid,
         execute: async (template, context) => {
-            const engine = new Liquid()
+            const liquidjs = await import('liquidjs')
+            const engine = new liquidjs.Liquid()
             return await engine.parseAndRender(template, context)
         }
     },
@@ -58,7 +55,8 @@ const GENERATOR_ENGINES: GeneratorEngine[] = [
         extensions: ['.mustache'],
         enumType: GeneratorEngineEnum.Mustache,
         execute: async (template, context) => {
-            return await mustache.render(template, context)
+            const mustache = await import('mustache')
+            return mustache.render(template, context)
         }
     },
     {
@@ -66,6 +64,7 @@ const GENERATOR_ENGINES: GeneratorEngine[] = [
         extensions: ['.njk', '.nunjucks'],
         enumType: GeneratorEngineEnum.Nunjucks,
         execute: async (template, context) => {
+            const nunjucks = await import('nunjucks')
             return nunjucks.renderString(template, context)
         }
     },
@@ -74,8 +73,9 @@ const GENERATOR_ENGINES: GeneratorEngine[] = [
         extensions: ['.pug'],
         enumType: GeneratorEngineEnum.Pug,
         execute: async (template, context) => {
-            const engine = pug.compile(template)
-            return await engine(context)
+            const pug = await import('pug')
+            const compiled = pug.compile(template)
+            return compiled(context)
         }
     },
 ]

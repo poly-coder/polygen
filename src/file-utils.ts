@@ -32,12 +32,12 @@ export async function fsExistsAsDirectory(path: string): Promise<boolean> {
   return (await fsStatsOrNull(path))?.isDirectory() ?? false;
 }
 
-export async function fsReadFileContent(path: string): Promise<string | null> {
+export async function fsReadFileContent(path: string): Promise<string | undefined> {
   try {
     return await fs.readFile(path, 'utf-8');
   } catch (error) {
     if (error?.code == 'ENOENT') {
-      return null;
+      return undefined;
     } else {
       throw error;
     }

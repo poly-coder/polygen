@@ -39,6 +39,7 @@ import { shorten, tracedError } from './logging';
 import { findGeneratorEngine, GeneratorEngine } from './generator-engines';
 import { CopyCommandStep, FileCommandStep } from './gen-steps';
 import path from 'path';
+import { findModelFormat, findModelFormatFromExtension } from './model-formats';
 
 export function createGeneratorsSystem(
   config: GeneratorSystemConfig,
@@ -424,6 +425,35 @@ export function createGeneratorsSystem(
     throw tracedError(console, 'There are no template engines available')
   }
 
+  const loadModel = async (
+    model: string | any | undefined,
+    modelFormat: string | undefined,
+    jsonPath: string | undefined,
+    previousModel?: any
+  ): Promise<any> => {
+    if (jsonPath) {
+      const baseModel = await loadModel(model, modelFormat, undefined, previousModel)
+      const jpp = await import('jsonpath-plus')
+      const result = jpp.JSONPath({ path: jsonPath, json: baseModel })
+      return result
+    }
+
+    if (typeof model === 'string') {
+      let loader = findModelFormat(modelFormat, console)
+      if (!loader) {
+        loader = findModelFormatFromExtension(path.extname(model), console)
+      }
+      const filePath = helpers.config.atCwdFullPath(model)
+      model = await loader!.load(filePath)
+    }
+
+    if (model) {
+      return model
+    }
+
+    return previousModel
+  }
+
   const copyProcessor = async (
     step: CopyCommandStep,
     context: RunCommandContext,
@@ -443,7 +473,7 @@ export function createGeneratorsSystem(
 
     const content = await fsReadFileContent(fromFullPath)
 
-    if (content === null) {
+    if (content === undefined) {
       throw tracedError(console, `${prefix}: Source file '${fromFullPath}' does not exists`)
     }
 
@@ -469,7 +499,7 @@ export function createGeneratorsSystem(
 
     const templateContent = await fsReadFileContent(fromFullPath)
 
-    if (templateContent === null) {
+    if (templateContent === undefined) {
       throw tracedError(console, `${prefix}: Source file '${fromFullPath}' does not exists`)
     }
 
@@ -496,6 +526,7 @@ export function createGeneratorsSystem(
     opts: RunGeneratorOptions,
     runtime: GeneratorRuntime
   ) => {
+    // TODO: Use parent context to build current one
     // console.trace('processGenerator: opts', opts);
 
     let [generator, command] = opts.generator.split(':');
@@ -540,13 +571,17 @@ export function createGeneratorsSystem(
       return;
     }
 
+    let model: any = await loadModel(opts.model, opts.modelFormat, opts.jsonPath, parentContext?.model ?? undefined);
+
+    console.trace('model', model)
+
     const context: RunCommandContext = {
       parent: parentContext,
       name: opts.name,
-      model: undefined,
-      h: helpers,
-      console,
-      genSystem,
+      model,
+      h: parentContext?.h ?? helpers,
+      console: parentContext?.console ?? console,
+      genSystem: parentContext?.genSystem ?? genSystem,
       generatorDescriptor,
       commandDescriptor,
     };

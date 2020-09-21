@@ -4,3 +4,7 @@ node_modules
 src
 tsconfig
 *.log
+
+_pcgen/
+.pcgen.json
+out/

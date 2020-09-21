@@ -17,7 +17,9 @@
     "dev:watch": "tsc --watch",
     "build:clean": "rimraf dist",
     "build:dist": "tsc",
-    "build": "run-s build:clean build:dist"
+    "build": "run-s build:clean build:dist",
+    "pcgen": "node dist/bin.js",
+    "pcgen-time": "node dist/bin-time.js"
   },
   "dependencies": {
     "chalk": "^4.1.0",

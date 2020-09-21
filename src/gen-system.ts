@@ -672,15 +672,61 @@ export function createGeneratorsSystem(
     // generator: generatorProcessor,
   };
 
-  const processGenerator = async (
-    parentContext: RunCommandContext | null,
+  const createContext = async (
     opts: RunGeneratorOptions,
-    runtime: GeneratorRuntime
-  ) => {
-    // TODO: Use parent context to build current one
-    // console.trace('processGenerator: opts', opts);
+    parentContext: RunCommandContext,
+  ): Promise<RunCommandContext> => {
+    const name = opts.name ?? parentContext.name
 
-    let [generator, command] = opts.generator.split(':');
+    if (parentContext.generatorDescriptor.data.requireName && !name) {
+      throw tracedError(
+        console,
+        `<name> parameter is required for this generator to run`
+      );
+    }
+
+    if (parentContext.commandDescriptor.data.requireName && !name) {
+      throw tracedError(
+        console,
+        `<name> parameter is required for this command to run`
+      );
+    }
+
+    const model: any = await loadModel(
+      opts.model,
+      opts.modelFormat,
+      opts.jsonPath,
+      parentContext.model
+    );
+
+    if (parentContext.generatorDescriptor.data.requireModel && !model) {
+      throw tracedError(
+        console,
+        `Model is required for this generator to run. Use option --model for it.`
+      );
+    }
+
+    if (parentContext.commandDescriptor.data.requireModel && !model) {
+      throw tracedError(
+        console,
+        `Model is required for this command to run. Use option --model for it.`
+      );
+    }
+
+    const context: RunCommandContext = {
+      ...parentContext,
+      parent: parentContext,
+      name: opts.name ?? parentContext.name,
+      model,
+    };
+
+    return context
+  }
+
+  const getGeneratorAndCommand = async (
+    generatorName: string
+  ): Promise<[GeneratorDescriptor, CommandDescriptor]> => {
+    let [generator, command] = generatorName.split(':');
 
     command = command ?? helpers.config.defaultCommand;
 
@@ -699,15 +745,8 @@ export function createGeneratorsSystem(
         `processGenerator: Generator '${chalk.redBright(
           generator
         )}' does not exists. Run '${chalk.greenBright(
-          `pcgen new generator {opts.generator}`
+          `pcgen new generator {generatorName}`
         )}' to create it.`
-      );
-    }
-
-    if (generatorDescriptor.data.requireName && !opts.name) {
-      throw tracedError(
-        console,
-        `<name> parameter is required for this generator to run`
       );
     }
 
@@ -716,7 +755,7 @@ export function createGeneratorsSystem(
     );
 
     if (!commandDescriptor) {
-      tracedError(
+      throw tracedError(
         console,
         `processGenerator: Command '${chalk.redBright(
           command
@@ -726,57 +765,29 @@ export function createGeneratorsSystem(
           helpers.config.atCommandsPath(generator, command)
         )}' to enable it`
       );
-      return;
     }
 
-    if (commandDescriptor.data.requireName && !opts.name) {
-      throw tracedError(
-        console,
-        `<name> parameter is required for this command to run`
-      );
-    }
+    return [generatorDescriptor, commandDescriptor]
+  }
 
-    const model: any = await loadModel(
-      opts.model,
-      opts.modelFormat,
-      opts.jsonPath,
-      parentContext?.model ?? undefined
-    );
+  const processGenerator = async (
+    parentContext: RunCommandContext,
+    opts: RunGeneratorOptions,
+    runtime: GeneratorRuntime
+  ) => {
 
-    console.log('model', model)
+    const [generatorDescriptor, commandDescriptor] = await getGeneratorAndCommand(opts.generator)
 
-    if (generatorDescriptor.data.requireModel && !model) {
-      throw tracedError(
-        console,
-        `Model is required for this generator to run. Use option --model for it.`
-      );
-    }
-
-    if (commandDescriptor.data.requireModel && !model) {
-      throw tracedError(
-        console,
-        `Model is required for this command to run. Use option --model for it.`
-      );
-    }
-
-    const context: RunCommandContext = {
-      parent: parentContext,
-      name: opts.name,
-      model,
-      h: parentContext?.h ?? helpers,
-      console: parentContext?.console ?? console,
-      genSystem: parentContext?.genSystem ?? genSystem,
+    const context = await createContext(opts, {
+      parent: null,
+      ...parentContext,
       generatorDescriptor,
       commandDescriptor,
-    };
-
-    // console.trace('processGenerator: context', context)
+    })
 
     const runResult = await context.commandDescriptor.runCommand(context);
 
     // TODO: Validate runResult with joi/jsonSchema
-
-    // console.trace('runResult', runResult);
 
     for (const step of runResult?.steps ?? []) {
       if (step.skip) {
@@ -902,7 +913,16 @@ export function createGeneratorsSystem(
   const runGenerator = async (opts: RunGeneratorOptions) => {
     const runtime = createRuntime(opts);
 
-    await processGenerator(null, opts, runtime);
+    const rootContext = {
+      parent: null,
+      name: undefined,
+      model: undefined,
+      h: helpers,
+      console,
+      genSystem,
+    } as RunCommandContext
+
+    await processGenerator(rootContext, opts, runtime);
 
     await runtime.execute();
   };

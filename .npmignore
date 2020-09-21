@@ -1,0 +1,6 @@
+.ionide
+.vscode
+node_modules
+src
+tsconfig
+*.log

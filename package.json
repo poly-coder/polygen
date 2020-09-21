@@ -1,6 +1,6 @@
 {
   "name": "pcgen",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Polyglot Code Generator, pcgen for friends",
   "main": "dist/index.js",
   "repository": {
@@ -10,8 +10,8 @@
   "author": "Iskander Sierra <iskander.sierra@gmail.com> (https://iskandersierra@github.com/)",
   "license": "MIT",
   "bin": {
-    "pcgen": "./dist/bin.js",
-    "pcgen-time": "./dist/bin-time.js"
+    "pcgen": "./bin/cli",
+    "pcgen-time": "./bin/cli-time"
   },
   "scripts": {
     "dev:watch": "tsc --watch",

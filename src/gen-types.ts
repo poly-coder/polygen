@@ -112,6 +112,7 @@ export interface GeneratorDescriptor {
     readonly name: string;
     readonly commands: ReadonlyArray<CommandDescriptor>;
     readonly engine?: TemplateEngine;
+    readonly engineOptions?: any;
     readonly data: GeneratorDescriptorData;
     readonly outDir: string;
 }

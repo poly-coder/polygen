@@ -39,6 +39,10 @@ export interface TemplateBasedCommandStep extends FileBasedCommandStep {
      */
     readonly engine?: string;
     /**
+     * Options for the engine
+     */
+    readonly engineOptions?: any;
+    /**
      * If a string, it indicates a file which content must be loaded as the model. Path based on CWD
      * If an object, it represents the model itself
      * If undefined, the model from the context is used, if any

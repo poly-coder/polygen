@@ -33,7 +33,7 @@ export interface TemplateEngine {
   readonly extensions: readonly string[];
   readonly enumType: TemplateEngineEnum;
   // TODO: Make execute receive the path instead of the content. Some engines allow to include/import and it needs actual paths
-  readonly execute: (filePath: string, context: any) => Promise<string>;
+  readonly execute: (filePath: string, context: any, options?: any) => Promise<string>;
 }
 
 // TODO: Make this an extensibility point
@@ -43,19 +43,20 @@ const TEMPLATE_ENGINES: TemplateEngine[] = [
     name: 'ejs',
     extensions: ['.ejs'],
     enumType: TemplateEngineEnum.EJS,
-    execute: async (filePath, context) => {
+    execute: async (filePath, context, options) => {
       const ejs = await import('ejs');
-      return await ejs.renderFile(filePath, context);
+      const compiled = ejs.compile(filePath, {...options, async: true, client: true})
+      return await compiled(context);
     },
   },
   {
     name: 'handlebars',
     extensions: ['.hbs', '.handlebars'],
     enumType: TemplateEngineEnum.Handlebars,
-    execute: async (filePath, context) => {
+    execute: async (filePath, context, options) => {
       return await withFileContent(filePath, async (text: string) => {
         const handlebars = await import('handlebars');
-        const compiled = handlebars.compile(text);
+        const compiled = handlebars.compile(text, options);
         return compiled(context);
       })
     },
@@ -64,9 +65,9 @@ const TEMPLATE_ENGINES: TemplateEngine[] = [
     name: 'liquid',
     extensions: ['.liquid'],
     enumType: TemplateEngineEnum.Liquid,
-    execute: async (filePath, context) => {
+    execute: async (filePath, context, options) => {
       const liquidjs = await import('liquidjs');
-      const engine = new liquidjs.Liquid();
+      const engine = new liquidjs.Liquid(options);
       return await engine.renderFile(filePath, context);
     },
   },
@@ -74,10 +75,12 @@ const TEMPLATE_ENGINES: TemplateEngine[] = [
     name: 'mustache',
     extensions: ['.mustache'],
     enumType: TemplateEngineEnum.Mustache,
-    execute: async (filePath, context) => {
+    execute: async (filePath, context, options) => {
       return await withFileContent(filePath, async (text: string) => {
         const mustache = await import('mustache');
-        return mustache.render(text, context);
+        const partials = options?.partials
+        const tags = options?.tags
+        return mustache.render(text, context, partials, tags);
       })
     },
   },
@@ -85,18 +88,19 @@ const TEMPLATE_ENGINES: TemplateEngine[] = [
     name: 'nunjucks',
     extensions: ['.njk', '.nunjucks'],
     enumType: TemplateEngineEnum.Nunjucks,
-    execute: async (filePath, context) => {
+    execute: async (filePath, context, options) => {
       const nunjucks = await import('nunjucks');
-      return nunjucks.render(filePath, context);
+      const environment = nunjucks.configure(options ?? {})
+      return environment.render(filePath, context);
     },
   },
   {
     name: 'pug',
     extensions: ['.pug'],
     enumType: TemplateEngineEnum.Pug,
-    execute: async (filePath, context) => {
+    execute: async (filePath, context, options) => {
       const pug = await import('pug');
-      const compiled = pug.compileFile(filePath);
+      const compiled = pug.compileFile(filePath, options);
       return compiled(context);
     },
   },

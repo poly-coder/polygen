@@ -36,7 +36,11 @@ import {
   replaceVariables,
 } from './gen-configuration';
 import { shorten, tracedError } from './logging';
-import { findTemplateEngine, findTemplateEngineFromExtension, TemplateEngine } from './generator-engines';
+import {
+  findTemplateEngine,
+  findTemplateEngineFromExtension,
+  TemplateEngine,
+} from './generator-engines';
 import {
   CopyCommandStep,
   FileCommandStep,
@@ -414,22 +418,23 @@ export function createGeneratorsSystem(
 
   const searchTemplateEngine = (
     localEngine: string | undefined,
+    localEngineOptions: any | undefined,
     fileExtension: string,
     context: RunCommandContext
-  ): TemplateEngine => {
+  ): [TemplateEngine, any] => {
     let engine = findTemplateEngine(localEngine, console);
 
     if (engine) {
-      return engine;
+      return [engine, localEngineOptions];
     }
 
     engine = context.generatorDescriptor.engine;
 
     if (engine) {
-      return engine;
+      return [engine, context.generatorDescriptor.engineOptions];
     }
 
-    return findTemplateEngineFromExtension(fileExtension, console)
+    return [findTemplateEngineFromExtension(fileExtension, console), undefined];
   };
 
   const loadModel = async (
@@ -472,56 +477,65 @@ export function createGeneratorsSystem(
     searchExpr: string | undefined,
     logPrefix: string
   ): [number, number] => {
-    let index = -1
-    let length = -1
-    let regexp = searchExpr ? new RegExp(searchExpr) : undefined
+    let index = -1;
+    let length = -1;
+    let regexp = searchExpr ? new RegExp(searchExpr) : undefined;
 
     if (regexp) {
-      const match = container.match(regexp)
-  
+      const match = container.match(regexp);
+
       if (match) {
-        index = match.index ?? -1
-        length = match[0].length
+        index = match.index ?? -1;
+        length = match[0].length;
       }
     } else if (searchText) {
-      index = container.indexOf(searchText)
-      length = searchText.length
+      index = container.indexOf(searchText);
+      length = searchText.length;
     } else {
-      throw tracedError(console, `${logPrefix}: Snippet steps have to specify both start and end boundaries`)
+      throw tracedError(
+        console,
+        `${logPrefix}: Snippet steps have to specify both start and end boundaries`
+      );
     }
-    
+
     if (index === -1) {
-      throw tracedError(console, `${logPrefix}: Didn't found the boundaries for snippet insertion`)
+      throw tracedError(
+        console,
+        `${logPrefix}: Didn't found the boundaries for snippet insertion`
+      );
     }
 
     // Look for line start and end
     while (index + length + 1 < container.length) {
       if (container[index + length + 1] == '\r') {
-        if (index + length + 2 < container.length && container[index + length + 2] == '\n') {
-          length += 2
-          break
+        if (
+          index + length + 2 < container.length &&
+          container[index + length + 2] == '\n'
+        ) {
+          length += 2;
+          break;
         } else {
-          length += 1
-          break
+          length += 1;
+          break;
         }
       } else if (container[index + length + 1] == '\n') {
-        length += 1
-        break
+        length += 1;
+        break;
       } else {
-        length += 1
+        length += 1;
       }
     }
 
     while (index >= 1) {
       if (container[index - 1] === '\r' || container[index - 1] === '\n') {
-        break
+        break;
       } else {
-        index -= 1
-        length += 1
+        index -= 1;
+        length += 1;
       }
     }
 
-    return [index, length]
+    return [index, length];
   };
 
   const copyProcessor = async (
@@ -588,20 +602,40 @@ export function createGeneratorsSystem(
       `${prefix}: Generating template from '${fromFullPath}' to '${toPath}'`
     );
 
-    const childOpts = { ...opts }
-    if (step.model) { childOpts.model = step.model }
-    if (step.modelFormat) { childOpts.modelFormat = step.modelFormat }
-    if (step.jsonPath) { childOpts.jsonPath = step.jsonPath }
+    const childOpts = { ...opts };
+    if (step.model) {
+      childOpts.model = step.model;
+    }
+    if (step.modelFormat) {
+      childOpts.modelFormat = step.modelFormat;
+    }
+    if (step.jsonPath) {
+      childOpts.jsonPath = step.jsonPath;
+    }
 
-    const model = await loadModel(step.model, step.modelFormat, step.jsonPath, context.model)
-    
-    const childContext = await createContext(opts, model, context)
+    const model = await loadModel(
+      step.model,
+      step.modelFormat,
+      step.jsonPath,
+      context.model
+    );
 
-    const engine = searchTemplateEngine(step.engine, path.extname(step.from), context);
+    const childContext = await createContext(opts, model, context);
 
-    console.trace(`${prefix}: Using template engine '${engine.name}'`)
+    const [engine, engineOptions] = searchTemplateEngine(
+      step.engine,
+      step.engineOptions,
+      path.extname(step.from),
+      context
+    );
 
-    const content = await engine.execute(fromFullPath, childContext);
+    console.trace(`${prefix}: Using template engine '${engine.name}'`);
+
+    const content = await engine.execute(
+      fromFullPath,
+      childContext,
+      engineOptions
+    );
 
     runtime.writeFile(toPath, content);
   };
@@ -639,8 +673,18 @@ export function createGeneratorsSystem(
       );
     }
 
-    const [startIndex, startLength] = findContainerPosition(currentContent, step.start, step.startRegExp, prefix);
-    const [endIndex] = findContainerPosition(currentContent, step.end, step.endRegExp, prefix);
+    const [startIndex, startLength] = findContainerPosition(
+      currentContent,
+      step.start,
+      step.startRegExp,
+      prefix
+    );
+    const [endIndex] = findContainerPosition(
+      currentContent,
+      step.end,
+      step.endRegExp,
+      prefix
+    );
 
     if (endIndex < startIndex + startLength) {
       throw tracedError(
@@ -649,23 +693,33 @@ export function createGeneratorsSystem(
       );
     }
 
-    const model = await loadModel(step.model, step.modelFormat, step.jsonPath, context.model)
-    
-    const childContext = await createContext(opts, model, context)
+    const model = await loadModel(
+      step.model,
+      step.modelFormat,
+      step.jsonPath,
+      context.model
+    );
 
-    const engine = searchTemplateEngine(step.engine, path.extname(step.from), context);
+    const childContext = await createContext(opts, model, context);
 
-    console.trace(`${prefix}: Using template engine '${engine.name}'`)
+    const [engine, engineOptions] = searchTemplateEngine(
+      step.engine,
+      step.engineOptions,
+      path.extname(step.from),
+      context
+    );
 
-    const snippet = await engine.execute(fromFullPath, childContext);
+    console.trace(`${prefix}: Using template engine '${engine.name}'`);
+
+    const snippet = await engine.execute(fromFullPath, childContext, engineOptions);
 
     // Insert snippet into currentContent
 
-    const startContent = currentContent.substring(0, startIndex + startLength)
-    const endContent = currentContent.substring(endIndex)
-    const content = `${startContent}${snippet}${endContent}`
+    const startContent = currentContent.substring(0, startIndex + startLength);
+    const endContent = currentContent.substring(endIndex);
+    const content = `${startContent}${snippet}${endContent}`;
 
-    runtime.writeFile(toPath, content)
+    runtime.writeFile(toPath, content);
   };
 
   const stepProcessors: Record<
@@ -687,9 +741,9 @@ export function createGeneratorsSystem(
   const createContext = async (
     opts: RunGeneratorOptions,
     currentModel: any | undefined,
-    parentContext: RunCommandContext,
+    parentContext: RunCommandContext
   ): Promise<RunCommandContext> => {
-    const name = opts.name ?? parentContext.name
+    const name = opts.name ?? parentContext.name;
 
     if (parentContext.generatorDescriptor.data.requireName && !name) {
       throw tracedError(
@@ -705,14 +759,14 @@ export function createGeneratorsSystem(
       );
     }
 
-    const model: any = currentModel 
+    const model: any = currentModel
       ? currentModel
       : await loadModel(
           opts.model,
           opts.modelFormat,
           opts.jsonPath,
           parentContext.model
-        )
+        );
 
     if (parentContext.generatorDescriptor.data.requireModel && !model) {
       throw tracedError(
@@ -735,8 +789,8 @@ export function createGeneratorsSystem(
       model,
     };
 
-    return context
-  }
+    return context;
+  };
 
   const getGeneratorAndCommand = async (
     generatorName: string
@@ -782,23 +836,25 @@ export function createGeneratorsSystem(
       );
     }
 
-    return [generatorDescriptor, commandDescriptor]
-  }
+    return [generatorDescriptor, commandDescriptor];
+  };
 
   const processGenerator = async (
     parentContext: RunCommandContext,
     opts: RunGeneratorOptions,
     runtime: GeneratorRuntime
   ) => {
-
-    const [generatorDescriptor, commandDescriptor] = await getGeneratorAndCommand(opts.generator)
+    const [
+      generatorDescriptor,
+      commandDescriptor,
+    ] = await getGeneratorAndCommand(opts.generator);
 
     const context = await createContext(opts, undefined, {
       parent: null,
       ...parentContext,
       generatorDescriptor,
       commandDescriptor,
-    })
+    });
 
     const runResult = await context.commandDescriptor.runCommand(context);
 
@@ -806,7 +862,7 @@ export function createGeneratorsSystem(
 
     for (const step of runResult?.steps ?? []) {
       if (step.skip) {
-        continue
+        continue;
       }
 
       const stepProcessor = stepProcessors[step.type];
@@ -908,9 +964,13 @@ export function createGeneratorsSystem(
         }
 
         if (toStdOut) {
-          global.console.log('----------------------------------------------------')
-          global.console.log(content)
-          global.console.log('----------------------------------------------------')
+          global.console.log(
+            '----------------------------------------------------'
+          );
+          global.console.log(content);
+          global.console.log(
+            '----------------------------------------------------'
+          );
         }
       }
     };
@@ -935,7 +995,7 @@ export function createGeneratorsSystem(
       h: helpers,
       console,
       genSystem,
-    } as RunCommandContext
+    } as RunCommandContext;
 
     await processGenerator(rootContext, opts, runtime);
 

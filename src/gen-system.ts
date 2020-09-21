@@ -593,7 +593,9 @@ export function createGeneratorsSystem(
     if (step.modelFormat) { childOpts.modelFormat = step.modelFormat }
     if (step.jsonPath) { childOpts.jsonPath = step.jsonPath }
 
-    const childContext = await createContext(childOpts, context)
+    const model = await loadModel(step.model, step.modelFormat, step.jsonPath, context.model)
+    
+    const childContext = await createContext(opts, model, context)
 
     const engine = searchTemplateEngine(step.engine, path.extname(step.from), context);
 
@@ -647,12 +649,9 @@ export function createGeneratorsSystem(
       );
     }
 
-    const childOpts = { ...opts }
-    if (step.model) { childOpts.model = step.model }
-    if (step.modelFormat) { childOpts.modelFormat = step.modelFormat }
-    if (step.jsonPath) { childOpts.jsonPath = step.jsonPath }
-
-    const childContext = await createContext(childOpts, context)
+    const model = await loadModel(step.model, step.modelFormat, step.jsonPath, context.model)
+    
+    const childContext = await createContext(opts, model, context)
 
     const engine = searchTemplateEngine(step.engine, path.extname(step.from), context);
 
@@ -687,6 +686,7 @@ export function createGeneratorsSystem(
 
   const createContext = async (
     opts: RunGeneratorOptions,
+    currentModel: any | undefined,
     parentContext: RunCommandContext,
   ): Promise<RunCommandContext> => {
     const name = opts.name ?? parentContext.name
@@ -705,12 +705,14 @@ export function createGeneratorsSystem(
       );
     }
 
-    const model: any = await loadModel(
-      opts.model,
-      opts.modelFormat,
-      opts.jsonPath,
-      parentContext.model
-    );
+    const model: any = currentModel 
+      ? currentModel
+      : await loadModel(
+          opts.model,
+          opts.modelFormat,
+          opts.jsonPath,
+          parentContext.model
+        )
 
     if (parentContext.generatorDescriptor.data.requireModel && !model) {
       throw tracedError(
@@ -791,7 +793,7 @@ export function createGeneratorsSystem(
 
     const [generatorDescriptor, commandDescriptor] = await getGeneratorAndCommand(opts.generator)
 
-    const context = await createContext(opts, {
+    const context = await createContext(opts, undefined, {
       parent: null,
       ...parentContext,
       generatorDescriptor,

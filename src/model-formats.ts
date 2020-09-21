@@ -19,6 +19,21 @@ export interface ModelFormat {
   readonly load: (filePath: string) => Promise<any | undefined>;
 }
 
+async function withFileContent(
+  filePath: string,
+  action: (content: string) => Promise<any>
+) {
+  try {
+    const text = await fsReadFileContent(filePath);
+    if (text) {
+      return await action(text);
+    }
+    throw new Error(`Model file '${filePath}' does not exists or is empty`);
+  } catch (error) {
+    throw new Error(`Model file '${filePath}' failed loading. \n${error}`);
+  }
+}
+
 // TODO: Make this an extensibility point
 
 const MODEL_FORMATS: ModelFormat[] = [
@@ -28,11 +43,17 @@ const MODEL_FORMATS: ModelFormat[] = [
     enumType: ModelFormatEnum.Module,
     load: async (filePath: string) => {
       try {
-        const loadedModule = await import(filePath)
-        console.dir(loadedModule)
-        return await loadedModule()
+        const loadedModule = await import(filePath);
+
+        if (typeof loadedModule?.default !== 'function') {
+          throw new Error(
+            `Module '${filePath}' does not exports default function`
+          );
+        }
+
+        return await loadedModule.default();
       } catch (error) {
-        throw new Error(`Model file '${filePath}' failed loading. \n${error}`)
+        throw new Error(`Model file '${filePath}' failed loading. \n${error}`);
       }
     },
   },
@@ -41,16 +62,10 @@ const MODEL_FORMATS: ModelFormat[] = [
     extensions: ['.json'],
     enumType: ModelFormatEnum.Json,
     load: async (filePath: string) => {
-      try {
-        const text = await fsReadFileContent(filePath)
-        if (text) {
-          const json5 = await import('json5')
-          return json5.parse(text)
-        }
-        throw new Error(`Model file '${filePath}' does not exists or is empty`)
-      } catch (error) {
-        throw new Error(`Model file '${filePath}' failed loading. \n${error}`)
-      }
+      return await withFileContent(filePath, async (text: string) => {
+        const json5 = await import('json5');
+        return json5.parse(text);
+      });
     },
   },
   {
@@ -58,16 +73,10 @@ const MODEL_FORMATS: ModelFormat[] = [
     extensions: ['.yaml', '.yml'],
     enumType: ModelFormatEnum.Json,
     load: async (filePath: string) => {
-      try {
-        const text = await fsReadFileContent(filePath)
-        if (text) {
-          const yaml = await import('js-yaml')
-          return yaml.safeLoad(text)
-        }
-        throw new Error(`Model file '${filePath}' does not exists or is empty`)
-      } catch (error) {
-        throw new Error(`Model file '${filePath}' failed loading. \n${error}`)
-      }
+      return await withFileContent(filePath, async (text: string) => {
+        const yaml = await import('js-yaml');
+        return yaml.safeLoad(text);
+      });
     },
   },
   {
@@ -75,16 +84,10 @@ const MODEL_FORMATS: ModelFormat[] = [
     extensions: ['.xml'],
     enumType: ModelFormatEnum.Xml,
     load: async (filePath: string) => {
-      try {
-        const text = await fsReadFileContent(filePath)
-        if (text) {
-          const xml = await import('xml2js')
-          return await xml.parseStringPromise(text)
-        }
-        throw new Error(`Model file '${filePath}' does not exists or is empty`)
-      } catch (error) {
-        throw new Error(`Model file '${filePath}' failed loading. \n${error}`)
-      }
+      return await withFileContent(filePath, async (text: string) => {
+        const xml = await import('xml2js');
+        return await xml.parseStringPromise(text);
+      });
     },
   },
   {
@@ -92,16 +95,10 @@ const MODEL_FORMATS: ModelFormat[] = [
     extensions: ['.toml'],
     enumType: ModelFormatEnum.Toml,
     load: async (filePath: string) => {
-      try {
-        const text = await fsReadFileContent(filePath)
-        if (text) {
-          const toml = await import('toml')
-          return toml.parse(text)
-        }
-        throw new Error(`Model file '${filePath}' does not exists or is empty`)
-      } catch (error) {
-        throw new Error(`Model file '${filePath}' failed loading. \n${error}`)
-      }
+      return await withFileContent(filePath, async (text: string) => {
+        const toml = await import('toml');
+        return toml.parse(text);
+      });
     },
   },
   {
@@ -109,16 +106,10 @@ const MODEL_FORMATS: ModelFormat[] = [
     extensions: ['.ini'],
     enumType: ModelFormatEnum.Ini,
     load: async (filePath: string) => {
-      try {
-        const text = await fsReadFileContent(filePath)
-        if (text) {
-          const ini = await import('ini')
-          return ini.decode(text)
-        }
-        throw new Error(`Model file '${filePath}' does not exists or is empty`)
-      } catch (error) {
-        throw new Error(`Model file '${filePath}' failed loading. \n${error}`)
-      }
+      return await withFileContent(filePath, async (text: string) => {
+        const ini = await import('ini');
+        return ini.decode(text);
+      });
     },
   },
 ];

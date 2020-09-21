@@ -179,16 +179,14 @@ export function createGeneratorsSystem(
       // TODO: try catch this to give a better error report
       const cmdModule = await import(modulePath);
 
-      if (typeof cmdModule?.default?.run !== 'function') {
+      if (typeof cmdModule?.default !== 'function') {
         throw tracedError(
           console,
-          `Module '${modulePath}' does not exports function ${chalk.redBright(
-            'run(context)'
-          )}`
+          `Module '${modulePath}' does not exports default function`
         );
       }
 
-      const runFunc: RunCommandFunc = cmdModule.default.run;
+      const runFunc: RunCommandFunc = cmdModule.default;
 
       const result: RunCommandResult | null = await runFunc(context);
 
@@ -595,18 +593,9 @@ export function createGeneratorsSystem(
       `${prefix}: Generating template from '${fromFullPath}' to '${toPath}'`
     );
 
-    const templateContent = await fsReadFileContent(fromFullPath);
-
-    if (templateContent === undefined) {
-      throw tracedError(
-        console,
-        `${prefix}: Source file '${fromFullPath}' does not exists`
-      );
-    }
-
     const engine = searchTemplateEngine(step.engine, context);
 
-    const content = await engine.execute(templateContent, context);
+    const content = await engine.execute(fromFullPath, context);
 
     runtime.writeFile(toPath, content);
   };
@@ -654,18 +643,9 @@ export function createGeneratorsSystem(
       );
     }
 
-    const templateContent = await fsReadFileContent(fromFullPath);
-
-    if (templateContent === undefined) {
-      throw tracedError(
-        console,
-        `${prefix}: Source file '${fromFullPath}' does not exists`
-      );
-    }
-
     const engine = searchTemplateEngine(step.engine, context);
 
-    const snippet = await engine.execute(templateContent, context);
+    const snippet = await engine.execute(fromFullPath, context);
 
     // Insert snippet into currentContent
 
@@ -756,12 +736,14 @@ export function createGeneratorsSystem(
       );
     }
 
-    let model: any = await loadModel(
+    const model: any = await loadModel(
       opts.model,
       opts.modelFormat,
       opts.jsonPath,
       parentContext?.model ?? undefined
     );
+
+    console.log('model', model)
 
     if (generatorDescriptor.data.requireModel && !model) {
       throw tracedError(

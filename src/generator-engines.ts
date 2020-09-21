@@ -45,8 +45,7 @@ const TEMPLATE_ENGINES: TemplateEngine[] = [
     enumType: TemplateEngineEnum.EJS,
     execute: async (filePath, context, options) => {
       const ejs = await import('ejs');
-      const compiled = ejs.compile(filePath, {...options, async: true, client: true})
-      return await compiled(context);
+      return  await ejs.renderFile(filePath, context, options)
     },
   },
   {

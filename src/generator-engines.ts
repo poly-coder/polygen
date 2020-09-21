@@ -3,7 +3,7 @@ import { Consola } from 'consola';
 import { fsReadFileContent } from './file-utils';
 import { tracedError } from './logging';
 
-export enum GeneratorEngineEnum {
+export enum TemplateEngineEnum {
   EJS,
   Handlebars,
   Liquid,
@@ -28,21 +28,21 @@ async function withFileContent(filePath: string, action: (content: string) => Pr
   }
 }
 
-export interface GeneratorEngine {
+export interface TemplateEngine {
   readonly name: string;
   readonly extensions: readonly string[];
-  readonly enumType: GeneratorEngineEnum;
+  readonly enumType: TemplateEngineEnum;
   // TODO: Make execute receive the path instead of the content. Some engines allow to include/import and it needs actual paths
   readonly execute: (filePath: string, context: any) => Promise<string>;
 }
 
 // TODO: Make this an extensibility point
 
-const GENERATOR_ENGINES: GeneratorEngine[] = [
+const TEMPLATE_ENGINES: TemplateEngine[] = [
   {
     name: 'ejs',
     extensions: ['.ejs'],
-    enumType: GeneratorEngineEnum.EJS,
+    enumType: TemplateEngineEnum.EJS,
     execute: async (filePath, context) => {
       const ejs = await import('ejs');
       return await ejs.renderFile(filePath, context);
@@ -51,7 +51,7 @@ const GENERATOR_ENGINES: GeneratorEngine[] = [
   {
     name: 'handlebars',
     extensions: ['.hbs', '.handlebars'],
-    enumType: GeneratorEngineEnum.Handlebars,
+    enumType: TemplateEngineEnum.Handlebars,
     execute: async (filePath, context) => {
       return await withFileContent(filePath, async (text: string) => {
         const handlebars = await import('handlebars');
@@ -63,7 +63,7 @@ const GENERATOR_ENGINES: GeneratorEngine[] = [
   {
     name: 'liquid',
     extensions: ['.liquid'],
-    enumType: GeneratorEngineEnum.Liquid,
+    enumType: TemplateEngineEnum.Liquid,
     execute: async (filePath, context) => {
       const liquidjs = await import('liquidjs');
       const engine = new liquidjs.Liquid();
@@ -73,7 +73,7 @@ const GENERATOR_ENGINES: GeneratorEngine[] = [
   {
     name: 'mustache',
     extensions: ['.mustache'],
-    enumType: GeneratorEngineEnum.Mustache,
+    enumType: TemplateEngineEnum.Mustache,
     execute: async (filePath, context) => {
       return await withFileContent(filePath, async (text: string) => {
         const mustache = await import('mustache');
@@ -84,7 +84,7 @@ const GENERATOR_ENGINES: GeneratorEngine[] = [
   {
     name: 'nunjucks',
     extensions: ['.njk', '.nunjucks'],
-    enumType: GeneratorEngineEnum.Nunjucks,
+    enumType: TemplateEngineEnum.Nunjucks,
     execute: async (filePath, context) => {
       const nunjucks = await import('nunjucks');
       return nunjucks.render(filePath, context);
@@ -93,7 +93,7 @@ const GENERATOR_ENGINES: GeneratorEngine[] = [
   {
     name: 'pug',
     extensions: ['.pug'],
-    enumType: GeneratorEngineEnum.Pug,
+    enumType: TemplateEngineEnum.Pug,
     execute: async (filePath, context) => {
       const pug = await import('pug');
       const compiled = pug.compileFile(filePath);
@@ -102,21 +102,21 @@ const GENERATOR_ENGINES: GeneratorEngine[] = [
   },
 ];
 
-function getGeneratorNames() {
-  return GENERATOR_ENGINES.map((e) => chalk.greenBright(e.name)).join(', ');
+function getEngineNames() {
+  return TEMPLATE_ENGINES.map((e) => chalk.greenBright(e.name)).join(', ');
 }
 
-export function findGeneratorEngine(
+export function findTemplateEngine(
   generatorName: string | undefined,
   console: Consola
-): GeneratorEngine | undefined {
+): TemplateEngine | undefined {
   if (!generatorName) {
     return undefined;
   }
 
   const name = generatorName.toLowerCase();
 
-  const engine = GENERATOR_ENGINES.find((e) => e.name == name);
+  const engine = TEMPLATE_ENGINES.find((e) => e.name == name);
 
   if (engine) {
     return engine;
@@ -126,6 +126,26 @@ export function findGeneratorEngine(
     console,
     `Invalid generator engine: '${chalk.redBright(
       generatorName
-    )}'. Use one of ${getGeneratorNames()}`
+    )}'. Use one of ${getEngineNames()}`
+  );
+}
+
+export function findTemplateEngineFromExtension(
+  extension: string,
+  console: Consola
+): TemplateEngine {
+  const ext = extension.toLowerCase();
+
+  const engine = TEMPLATE_ENGINES.find((e) => e.extensions.indexOf(ext) >= 0);
+
+  if (engine) {
+    return engine;
+  }
+
+  throw tracedError(
+    console,
+    `Unrecognized template extension: '${chalk.redBright(
+      extension
+    )}'. Try to specify an explicit engine from the following list: ${getEngineNames()}`
   );
 }

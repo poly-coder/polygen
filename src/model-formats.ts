@@ -148,10 +148,10 @@ export function findModelFormatFromExtension(
 ): ModelFormat {
   const ext = extension.toLowerCase();
 
-  const engine = MODEL_FORMATS.find((e) => e.extensions.indexOf(ext) >= 0);
+  const format = MODEL_FORMATS.find((e) => e.extensions.indexOf(ext) >= 0);
 
-  if (engine) {
-    return engine;
+  if (format) {
+    return format;
   }
 
   throw tracedError(

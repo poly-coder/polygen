@@ -1,6 +1,6 @@
 {
   "name": "pcgen",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Polyglot Code Generator, pcgen for friends",
   "main": "dist/index.js",
   "repository": {

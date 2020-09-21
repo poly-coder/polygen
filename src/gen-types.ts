@@ -1,6 +1,6 @@
 import { Consola } from "consola";
 import { CommandStep } from "./gen-steps";
-import { GeneratorEngine } from "./generator-engines";
+import { TemplateEngine } from "./generator-engines";
 
 export type Mutable<T> = {
     -readonly[P in keyof T]: T[P]
@@ -111,7 +111,7 @@ export interface GeneratorDescriptor {
     readonly fullPath: string;
     readonly name: string;
     readonly commands: ReadonlyArray<CommandDescriptor>;
-    readonly engine?: GeneratorEngine;
+    readonly engine?: TemplateEngine;
     readonly data: GeneratorDescriptorData;
     readonly outDir: string;
 }

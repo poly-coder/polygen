@@ -36,7 +36,7 @@ import {
   replaceVariables,
 } from './gen-configuration';
 import { shorten, tracedError } from './logging';
-import { findGeneratorEngine, GeneratorEngine } from './generator-engines';
+import { findTemplateEngine, findTemplateEngineFromExtension, TemplateEngine } from './generator-engines';
 import {
   CopyCommandStep,
   FileCommandStep,
@@ -343,7 +343,7 @@ export function createGeneratorsSystem(
       data,
       name: generatorName,
       fullPath: generatorFullPath,
-      engine: findGeneratorEngine(data.engine, console),
+      engine: findTemplateEngine(data.engine, console),
       commands,
       outDir,
     };
@@ -414,9 +414,10 @@ export function createGeneratorsSystem(
 
   const searchTemplateEngine = (
     localEngine: string | undefined,
+    fileExtension: string,
     context: RunCommandContext
-  ): GeneratorEngine => {
-    let engine = findGeneratorEngine(localEngine, console);
+  ): TemplateEngine => {
+    let engine = findTemplateEngine(localEngine, console);
 
     if (engine) {
       return engine;
@@ -428,13 +429,7 @@ export function createGeneratorsSystem(
       return engine;
     }
 
-    engine = findGeneratorEngine('ejs', console);
-
-    if (engine) {
-      return engine;
-    }
-
-    throw tracedError(console, 'There are no template engines available');
+    return findTemplateEngineFromExtension(fileExtension, console)
   };
 
   const loadModel = async (
@@ -593,9 +588,18 @@ export function createGeneratorsSystem(
       `${prefix}: Generating template from '${fromFullPath}' to '${toPath}'`
     );
 
-    const engine = searchTemplateEngine(step.engine, context);
+    const childOpts = { ...opts }
+    if (step.model) { childOpts.model = step.model }
+    if (step.modelFormat) { childOpts.modelFormat = step.modelFormat }
+    if (step.jsonPath) { childOpts.jsonPath = step.jsonPath }
 
-    const content = await engine.execute(fromFullPath, context);
+    const childContext = await createContext(childOpts, context)
+
+    const engine = searchTemplateEngine(step.engine, path.extname(step.from), context);
+
+    console.trace(`${prefix}: Using template engine '${engine.name}'`)
+
+    const content = await engine.execute(fromFullPath, childContext);
 
     runtime.writeFile(toPath, content);
   };
@@ -603,7 +607,7 @@ export function createGeneratorsSystem(
   const snippetProcessor = async (
     step: SnippetCommandStep,
     context: RunCommandContext,
-    _opts: RunGeneratorOptions,
+    opts: RunGeneratorOptions,
     runtime: GeneratorRuntime
   ) => {
     const prefix = `snippetProcessor${
@@ -643,9 +647,18 @@ export function createGeneratorsSystem(
       );
     }
 
-    const engine = searchTemplateEngine(step.engine, context);
+    const childOpts = { ...opts }
+    if (step.model) { childOpts.model = step.model }
+    if (step.modelFormat) { childOpts.modelFormat = step.modelFormat }
+    if (step.jsonPath) { childOpts.jsonPath = step.jsonPath }
 
-    const snippet = await engine.execute(fromFullPath, context);
+    const childContext = await createContext(childOpts, context)
+
+    const engine = searchTemplateEngine(step.engine, path.extname(step.from), context);
+
+    console.trace(`${prefix}: Using template engine '${engine.name}'`)
+
+    const snippet = await engine.execute(fromFullPath, childContext);
 
     // Insert snippet into currentContent
 

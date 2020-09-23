@@ -602,17 +602,6 @@ export function createGeneratorsSystem(
       `${prefix}: Generating template from '${fromFullPath}' to '${toPath}'`
     );
 
-    const childOpts = { ...opts };
-    if (step.model) {
-      childOpts.model = step.model;
-    }
-    if (step.modelFormat) {
-      childOpts.modelFormat = step.modelFormat;
-    }
-    if (step.jsonPath) {
-      childOpts.jsonPath = step.jsonPath;
-    }
-
     const model = await loadModel(
       step.model,
       step.modelFormat,
@@ -679,6 +668,7 @@ export function createGeneratorsSystem(
       step.startRegExp,
       prefix
     );
+
     const [endIndex] = findContainerPosition(
       currentContent,
       step.end,
@@ -863,6 +853,13 @@ export function createGeneratorsSystem(
     for (const step of runResult?.steps ?? []) {
       if (step.skip) {
         continue;
+      }
+
+      if (opts.step) {
+        const allowedSteps = opts.step.split(',').map(s => s.trim()).filter(s => !!s)
+        if (!step.stepName && !allowedSteps.includes(step.stepName ?? '')) {
+          continue
+        }
       }
 
       const stepProcessor = stepProcessors[step.type];

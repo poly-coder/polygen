@@ -19,8 +19,10 @@
     "build:clean": "rimraf dist output",
     "build:dist": "tsc",
     "build": "run-s build:clean build:dist",
-    "test:code": "jest --coverage --coverageDirectory=output/coverage/jest",
-    "test:watch": "jest --watch --coverage --coverageDirectory=output/coverage/jest",
+    "test:default": "jest --all --coverage --coverageDirectory=output/coverage/jest",
+    "test:code": "yarn test:default",
+    "test:watch": "yarn test:default --watch --watchAll=true",
+    "test:ci": "yarn test:default --ci",
     "test:time_init": "run-s clean:pcgen pcgen-time:init clean:pcgen",
     "watch": "run-s test:watch",
     "pcgen": "node dist/bin.js",
@@ -80,6 +82,9 @@
       "^.+\\.tsx?$": "ts-jest"
     },
     "testRegex": "src/__tests__/.*\\.spec\\.ts$",
+    "collectCoverageFrom": [
+      "src/*.ts"
+    ],
     "moduleFileExtensions": [
       "ts",
       "tsx",

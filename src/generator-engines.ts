@@ -101,7 +101,7 @@ export function findTemplateEngine(
   generatorName: string | undefined,
   console: Consola
 ): TemplateEngine | undefined {
-  if (!generatorName) {
+  if (generatorName === undefined) {
     return undefined;
   }
 
@@ -137,6 +137,6 @@ export function findTemplateEngineFromExtension(
     console,
     `Unrecognized template extension: '${chalk.redBright(
       extension
-    )}'. Try to specify an explicit engine from the following list: ${getTemplateExtensions()}`
+    )}'. Try to specify an explicit engine from the following list : ${getTemplateExtensions()}`
   );
 }

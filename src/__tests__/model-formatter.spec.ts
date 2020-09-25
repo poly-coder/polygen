@@ -18,7 +18,7 @@ describe('findModelFormat', () => {
   })
 
   describe('given an invalid modelFormat', () => {
-    it('it should return undefined', () =>
+    it('it should throw Error indicating invalid model format', () =>
       expect(() => findModelFormat('invalid format', consola)).toThrowError(/Invalid model format:/g));
   })
 

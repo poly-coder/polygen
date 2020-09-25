@@ -3,6 +3,7 @@ import path from 'path';
 import { Consola } from 'consola';
 import { fsReadFileContent, joinPaths } from './file-utils';
 import { tracedError } from './logging';
+import chalk from 'chalk';
 
 const defaultGeneratorSystemConfig: GeneratorSystemConfig = {
   searchPaths: [],
@@ -56,7 +57,10 @@ export async function readGeneratorSystemConfig(
     }
   }
 
-  return createGeneratorSystemConfig(undefined);
+  throw tracedError(
+    console,
+    `readGeneratorSystemConfig: Generator configuration file NOT FOUND. Try ${chalk.greenBright("'pcgen init'")} to create one.`
+  );
 }
 
 export function createConfigHelpers(config: GeneratorSystemConfig) {

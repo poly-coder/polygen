@@ -205,19 +205,55 @@ describe('readGeneratorSystemConfig', () => {
     });
 
     describe('when no config file is available', () => {
-      it('should call readFile three times and return the default configuration', async () => {
+      it('should call readFile three times and throw an error indicating configuration file was not found', async () => {
         const readFile = mockReadFileFor('other-file.txt', "Won't be read anyway")
 
-        const config = await readGeneratorSystemConfig({}, consola)
-        
+        const configPromise = readGeneratorSystemConfig({}, consola)
+
+        await expect(configPromise).rejects.toThrowError(/readGeneratorSystemConfig: Generator configuration file NOT FOUND/g)
         expect(readFile).toHaveBeenCalledTimes(3)
         expect(readFile).toHaveBeenNthCalledWith(1, '.pcgen.json', 'utf-8')
         expect(readFile).toHaveBeenNthCalledWith(2, '.pcgen', 'utf-8')
         expect(readFile).toHaveBeenNthCalledWith(3, '.pcgenrc', 'utf-8')
-        expect(config).toEqual(createGeneratorSystemConfig({}))
       });
     });
   })
-  
-  jest.fn().mockImplementation()
+
+  describe('when given custom --config-file option', () => {
+    describe('when .custom.pcgen.json is available and valid', () => {
+      it('should call readFile once and return the proper configuration', async () => {
+        const readFile = mockReadFileFor('.custom.pcgen.json', JSON.stringify(dummyConfiguration))
+
+        const config = await readGeneratorSystemConfig({ configFile: '.custom.pcgen.json' }, consola)
+        
+        expect(readFile).toHaveBeenCalledTimes(1)
+        expect(readFile).toHaveBeenCalledWith('.custom.pcgen.json', 'utf-8')
+        expect(config).toEqual(dummyConfiguration)
+      });
+    });
+
+    describe('when .custom.pcgen.json is available and invalid', () => {
+      it('should call readFile once and throw an error indicating error reading configuration', async () => {
+        const readFile = mockReadFileFor('.custom.pcgen.json', "Invalid JSON content")
+
+        const configPromise = readGeneratorSystemConfig({ configFile: '.custom.pcgen.json' }, consola)
+
+        await expect(configPromise).rejects.toThrowError(/readGeneratorSystemConfig: Error reading generator configuration from file '.custom.pcgen.json'/g)
+        expect(readFile).toHaveBeenCalledTimes(1)
+        expect(readFile).toHaveBeenNthCalledWith(1, '.custom.pcgen.json', 'utf-8')
+      });
+    });
+
+    describe('when custom config file is not available', () => {
+      it('should call readFile once and throw an error indicating configuration file was not found', async () => {
+        const readFile = mockReadFileFor('other-file.txt', "Won't be read anyway")
+
+        const configPromise = readGeneratorSystemConfig({ configFile: '.custom.pcgen.json' }, consola)
+
+        await expect(configPromise).rejects.toThrowError(/readGeneratorSystemConfig: Generator configuration file NOT FOUND/g)
+        expect(readFile).toHaveBeenCalledTimes(1)
+        expect(readFile).toHaveBeenNthCalledWith(1, '.custom.pcgen.json', 'utf-8')
+      });
+    });
+  });
 });

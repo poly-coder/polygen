@@ -27,7 +27,7 @@ export function listCommand(command: commander.Command) {
 
 async function executeListCommand(opts: ListCommandOptions) {
   const console = getConsola(opts);
-  const config = await readGeneratorSystemConfig(console);
+  const config = await readGeneratorSystemConfig(opts, console);
   const genSystem = createGeneratorsSystem(config, console);
 
   if (!(await genSystem.ensureInitialized())) {

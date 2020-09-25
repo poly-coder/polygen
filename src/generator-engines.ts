@@ -3,15 +3,6 @@ import { Consola } from 'consola';
 import { fsReadFileContent } from './file-utils';
 import { tracedError } from './logging';
 
-export enum TemplateEngineEnum {
-  EJS,
-  Handlebars,
-  Liquid,
-  Mustache,
-  Nunjucks,
-  Pug,
-}
-
 async function withFileContent(filePath: string, action: (content: string) => Promise<string>) {
   try {
     const text = await fsReadFileContent(filePath);
@@ -31,7 +22,6 @@ async function withFileContent(filePath: string, action: (content: string) => Pr
 export interface TemplateEngine {
   readonly name: string;
   readonly extensions: readonly string[];
-  readonly enumType: TemplateEngineEnum;
   // TODO: Make execute receive the path instead of the content. Some engines allow to include/import and it needs actual paths
   readonly execute: (filePath: string, context: any, options?: any) => Promise<string>;
 }
@@ -42,7 +32,6 @@ const TEMPLATE_ENGINES: TemplateEngine[] = [
   {
     name: 'ejs',
     extensions: ['.ejs'],
-    enumType: TemplateEngineEnum.EJS,
     execute: async (filePath, context, options) => {
       const ejs = await import('ejs');
       return  await ejs.renderFile(filePath, context, options)
@@ -51,7 +40,6 @@ const TEMPLATE_ENGINES: TemplateEngine[] = [
   {
     name: 'handlebars',
     extensions: ['.hbs', '.handlebars'],
-    enumType: TemplateEngineEnum.Handlebars,
     execute: async (filePath, context, options) => {
       return await withFileContent(filePath, async (text: string) => {
         const handlebars = await import('handlebars');
@@ -63,7 +51,6 @@ const TEMPLATE_ENGINES: TemplateEngine[] = [
   {
     name: 'liquid',
     extensions: ['.liquid'],
-    enumType: TemplateEngineEnum.Liquid,
     execute: async (filePath, context, options) => {
       const liquidjs = await import('liquidjs');
       const engine = new liquidjs.Liquid(options);
@@ -73,7 +60,6 @@ const TEMPLATE_ENGINES: TemplateEngine[] = [
   {
     name: 'mustache',
     extensions: ['.mustache'],
-    enumType: TemplateEngineEnum.Mustache,
     execute: async (filePath, context, options) => {
       return await withFileContent(filePath, async (text: string) => {
         const mustache = await import('mustache');
@@ -86,7 +72,6 @@ const TEMPLATE_ENGINES: TemplateEngine[] = [
   {
     name: 'nunjucks',
     extensions: ['.njk', '.nunjucks'],
-    enumType: TemplateEngineEnum.Nunjucks,
     execute: async (filePath, context, options) => {
       const nunjucks = await import('nunjucks');
       const environment = nunjucks.configure(options ?? {})
@@ -96,7 +81,6 @@ const TEMPLATE_ENGINES: TemplateEngine[] = [
   {
     name: 'pug',
     extensions: ['.pug'],
-    enumType: TemplateEngineEnum.Pug,
     execute: async (filePath, context, options) => {
       const pug = await import('pug');
       const compiled = pug.compileFile(filePath, options);
@@ -107,6 +91,10 @@ const TEMPLATE_ENGINES: TemplateEngine[] = [
 
 function getEngineNames() {
   return TEMPLATE_ENGINES.map((e) => chalk.greenBright(e.name)).join(', ');
+}
+
+function getTemplateExtensions() {
+  return TEMPLATE_ENGINES.flatMap(e => e.extensions).map((e) => chalk.greenBright(e)).join(', ');
 }
 
 export function findTemplateEngine(
@@ -149,6 +137,6 @@ export function findTemplateEngineFromExtension(
     console,
     `Unrecognized template extension: '${chalk.redBright(
       extension
-    )}'. Try to specify an explicit engine from the following list: ${getEngineNames()}`
+    )}'. Try to specify an explicit engine from the following list: ${getTemplateExtensions()}`
   );
 }

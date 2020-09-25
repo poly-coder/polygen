@@ -1,0 +1,8 @@
+<Sample Name="sample">
+  <Summary>Sample model in XML format</Summary>
+  <Entities>
+    <Entity Name="Person">
+    </Entity>
+    <Entity Name="BankAccount"/>
+  </Entities>
+</Sample>

@@ -5,9 +5,9 @@ import { getOptions, PCGenProgramOptions } from './common';
 import { getConsola, printDetails, printField } from './logging';
 import { createGeneratorsSystem } from './gen-system';
 import { readGeneratorSystemConfig } from './gen-configuration';
-import { GeneratorDescriptor } from './gen-types';
+import { GeneratorDescriptor, GlobalOptions } from './gen-types';
 
-export interface InfoCommandOptions extends PCGenProgramOptions {
+export interface InfoCommandOptions extends PCGenProgramOptions, GlobalOptions {
   readonly generatorName: string;
 }
 
@@ -27,7 +27,7 @@ export function infoCommand(command: commander.Command) {
 
 async function executeInfoCommand(opts: InfoCommandOptions) {
   const console = getConsola(opts);
-  const config = await readGeneratorSystemConfig(console);
+  const config = await readGeneratorSystemConfig(opts, console);
   const genSystem = createGeneratorsSystem(config, console);
 
   if (!(await genSystem.ensureInitialized())) {

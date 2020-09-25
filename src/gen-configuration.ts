@@ -1,4 +1,4 @@
-import { GeneratorSystemConfig, Variables } from './gen-types';
+import { GeneratorSystemConfig, GlobalOptions, Variables } from './gen-types';
 import path from 'path';
 import { Consola } from 'consola';
 import { fsReadFileContent, joinPaths } from './file-utils';
@@ -31,19 +31,26 @@ export function createGeneratorSystemConfig(
 export const pcgenConfigFileNames = ['.pcgen.json', '.pcgen', '.pcgenrc'];
 
 export async function readGeneratorSystemConfig(
+  options: GlobalOptions,
   console: Consola
 ): Promise<GeneratorSystemConfig> {
-  for (const fileName of pcgenConfigFileNames) {
+  const configFileNames = options.configFile
+    ? [options.configFile]
+    : pcgenConfigFileNames
+
+  for (const fileName of configFileNames) {
     let content = await fsReadFileContent(fileName);
 
     if (content) {
       try {
         const options = JSON.parse(content);
-        return createGeneratorSystemConfig(options);
+        const result = createGeneratorSystemConfig(options);
+        console.trace(`readGeneratorSystemConfig: Using pcgen config file '${fileName}'`)
+        return result
       } catch (error) {
         throw tracedError(
           console,
-          `Error reading generator configuration from file '${fileName}'`
+          `readGeneratorSystemConfig: Error reading generator configuration from file '${fileName}'`
         );
       }
     }

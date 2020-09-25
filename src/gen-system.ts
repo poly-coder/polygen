@@ -149,7 +149,7 @@ export function createGeneratorsSystem(
         `initialize: Copied file "${sourceGitIgnore}" to "${targetGitIgnore}"`
       );
 
-      const configPath = configHelpers.atCwdFullPath(pcgenConfigFileNames[0]);
+      const configPath = configHelpers.atCwdFullPath(options.configFile ?? pcgenConfigFileNames[0]);
       const jsonContent = JSON.stringify(newConfig, null, 4);
       await fsWriteFileContent(configPath, jsonContent);
       console.trace(`initialize: Writen config at "${configPath}"`);

@@ -3,19 +3,9 @@ import { Consola } from 'consola';
 import { fsReadFileContent } from './file-utils';
 import { tracedError } from './logging';
 
-export enum ModelFormatEnum {
-  Module,
-  Json,
-  Yaml,
-  Xml,
-  Toml,
-  Ini,
-}
-
 export interface ModelFormat {
   readonly name: string;
   readonly extensions: readonly string[];
-  readonly enumType: ModelFormatEnum;
   readonly load: (filePath: string) => Promise<any | undefined>;
 }
 
@@ -40,12 +30,11 @@ const MODEL_FORMATS: ModelFormat[] = [
   {
     name: 'module',
     extensions: ['.js'],
-    enumType: ModelFormatEnum.Module,
     load: async (filePath: string) => {
       try {
         const loadedModule = await import(filePath);
 
-        if (typeof loadedModule?.default !== 'function') {
+        if (typeof loadedModule.default !== 'function') {
           throw new Error(
             `Module '${filePath}' does not exports default function`
           );
@@ -59,8 +48,7 @@ const MODEL_FORMATS: ModelFormat[] = [
   },
   {
     name: 'json',
-    extensions: ['.json'],
-    enumType: ModelFormatEnum.Json,
+    extensions: ['.json', '.json5'],
     load: async (filePath: string) => {
       return await withFileContent(filePath, async (text: string) => {
         const json5 = await import('json5');
@@ -71,7 +59,6 @@ const MODEL_FORMATS: ModelFormat[] = [
   {
     name: 'yaml',
     extensions: ['.yaml', '.yml'],
-    enumType: ModelFormatEnum.Json,
     load: async (filePath: string) => {
       return await withFileContent(filePath, async (text: string) => {
         const yaml = await import('js-yaml');
@@ -82,7 +69,6 @@ const MODEL_FORMATS: ModelFormat[] = [
   {
     name: 'xml',
     extensions: ['.xml'],
-    enumType: ModelFormatEnum.Xml,
     load: async (filePath: string) => {
       return await withFileContent(filePath, async (text: string) => {
         const xml = await import('xml2js');
@@ -93,7 +79,6 @@ const MODEL_FORMATS: ModelFormat[] = [
   {
     name: 'toml',
     extensions: ['.toml'],
-    enumType: ModelFormatEnum.Toml,
     load: async (filePath: string) => {
       return await withFileContent(filePath, async (text: string) => {
         const toml = await import('toml');
@@ -104,7 +89,6 @@ const MODEL_FORMATS: ModelFormat[] = [
   {
     name: 'ini',
     extensions: ['.ini'],
-    enumType: ModelFormatEnum.Ini,
     load: async (filePath: string) => {
       return await withFileContent(filePath, async (text: string) => {
         const ini = await import('ini');
@@ -118,25 +102,29 @@ function getModelFormats() {
   return MODEL_FORMATS.map((e) => chalk.greenBright(e.name)).join(', ');
 }
 
+function getModelExtensions() {
+  return MODEL_FORMATS.flatMap(e => e.extensions).map((e) => chalk.greenBright(e)).join(', ');
+}
+
 export function findModelFormat(
   modelFormat: string | undefined,
   console: Consola
 ): ModelFormat | undefined {
-  if (!modelFormat) {
+  if (modelFormat === undefined) {
     return undefined;
   }
 
   const name = modelFormat.toLowerCase();
 
-  const engine = MODEL_FORMATS.find((e) => e.name == name);
+  const formatter = MODEL_FORMATS.find((e) => e.name == name);
 
-  if (engine) {
-    return engine;
+  if (formatter) {
+    return formatter;
   }
 
   throw tracedError(
     console,
-    `Invalid model: '${chalk.redBright(
+    `Invalid model format: '${chalk.redBright(
       modelFormat
     )}'. Use one of ${getModelFormats()}`
   );
@@ -158,6 +146,6 @@ export function findModelFormatFromExtension(
     console,
     `Unrecognized model format extension: '${chalk.redBright(
       extension
-    )}'. Try to specify an explicit format from the following list: ${getModelFormats()}`
+    )}'. Try to specify an explicit format from the following list: ${getModelExtensions()}`
   );
 }

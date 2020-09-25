@@ -32,7 +32,7 @@ export function newCommand(command: commander.Command) {
     
 async function executeNewCommand(opts: NewCommandOptions) {
     const console = getConsola(opts);
-    const config = await readGeneratorSystemConfig(console);
+    const config = await readGeneratorSystemConfig(opts, console);
     const genSystem = createGeneratorsSystem(config, console);
   
     if (!(await genSystem.ensureInitialized())) {

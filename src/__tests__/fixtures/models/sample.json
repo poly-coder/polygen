@@ -1,0 +1,12 @@
+{
+  "name": "sample",
+  "summary": "Sample model in json format",
+  "entities": [
+    {
+      "name": "Person"
+    },
+    {
+      "name": "BankAccount"
+    }
+  ]
+}

@@ -12,6 +12,7 @@ mainProgram
     .version('0.0.0')
     .name('pcgen')
     .description('Polyglot code generator, based on models and templates you can own')
+    .option('--config-file', 'Configuration file name for pcgen. Defaults to ".pcgen.json"')
     .action(async (args) => args.help())
 logLevelOption(mainProgram)
 

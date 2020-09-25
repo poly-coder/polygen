@@ -47,11 +47,15 @@ export interface GeneratorSystemConfig {
     readonly initAssets: string;
 }
 
-export interface ListGeneratorsOptions {
+export interface GlobalOptions {
+    readonly configFile?: string;
+}
+
+export interface ListGeneratorsOptions extends GlobalOptions {
     readonly name?: string;
 }
 
-export interface InitializeOptions {
+export interface InitializeOptions extends GlobalOptions {
     readonly searchPaths?: string;
     readonly basePath?: string;
     readonly pcgenFolder?: string;
@@ -63,7 +67,7 @@ export interface InitializeOptions {
     readonly initAssets?: string;
 }
 
-export interface RunGeneratorOptions {
+export interface RunGeneratorOptions extends GlobalOptions {
     readonly name?: string;
     readonly generator: string;
     readonly step?: string;

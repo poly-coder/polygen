@@ -1,0 +1,21 @@
+/**
+  Multiline comment
+*/
+{
+  name: "sample",
+  summary: "Sample model \
+in json format",
+  hex: 0xDEADbeef,
+  exp: .5e+6,
+  positive: +42,
+  to: Infinity, // and beyond
+  // List of entities
+  entities: [
+    {
+      name: "Person", // This is an inline comment
+    },
+    {
+      name: "BankAccount",
+    },
+  ],
+}

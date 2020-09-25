@@ -14,12 +14,18 @@
     "pcgen-time": "./bin/cli-time"
   },
   "scripts": {
+    "clean:pcgen": "rimraf _pcgen .pcgen.json",
     "dev:watch": "tsc --watch",
-    "build:clean": "rimraf dist",
+    "build:clean": "rimraf dist output",
     "build:dist": "tsc",
     "build": "run-s build:clean build:dist",
+    "test:code": "jest --coverage --coverageDirectory=output/coverage/jest",
+    "test:watch": "jest --watch --coverage --coverageDirectory=output/coverage/jest",
+    "test:time_init": "run-s clean:pcgen pcgen-time:init clean:pcgen",
+    "watch": "run-s test:watch",
     "pcgen": "node dist/bin.js",
-    "pcgen-time": "node dist/bin-time.js"
+    "pcgen-time": "node dist/bin-time.js",
+    "pcgen-time:init": "node dist/bin-time.js init"
   },
   "dependencies": {
     "chalk": "^4.1.0",

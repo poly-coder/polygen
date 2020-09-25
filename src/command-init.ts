@@ -21,12 +21,13 @@ export function initCommand(command: commander.Command) {
         .option('-t, --templates-folder', 'Templates folder where templates are located, relative to generator folder')
         .option('-d, --default-command', 'Default command used when a generator is executed')
         .option('--cwd', 'Current working directory where new files are generated relative to it')
+        .option('--init-assets', 'Folder containing initial generator assets to copy to local _pcgen folder')
         .action(args => executeInitCommand(getOptions(args)))
     }
     
 async function executeInitCommand(opts: InitCommandOptions) {
     const console = getConsola(opts);
-    const config = await readGeneratorSystemConfig(console)
+    const config = await readGeneratorSystemConfig(opts, console)
     const genSystem = createGeneratorsSystem(config, console);
 
     if (await genSystem.isInitialized()) {

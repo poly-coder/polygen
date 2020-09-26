@@ -936,8 +936,6 @@ export function createGeneratorsSystem(
         }
 
         if (toFiles) {
-          await fs.ensureDir(path.dirname(fullPath));
-
           await fsWriteFileContent(fullPath, content);
 
           console.trace(

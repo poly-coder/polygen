@@ -7,6 +7,7 @@ import {
   readGeneratorSystemConfig,
 } from '../gen-configuration';
 import { GeneratorSystemConfig } from '../gen-types';
+import { mockReadFileFor } from './test-utils';
 
 jest.mock('fs-extra');
 
@@ -21,29 +22,6 @@ const dummyConfiguration = {
   searchPaths: ['/c/mnt/users/myself/.pcgen'],
   templatesFolder: 'tmpls',
 };
-
-function createCodedError(message: string, code: string) {
-  const error = new Error(message)
-  Object.defineProperty(error, 'code', {
-    get: () => code,
-  })
-  return error
-}
-
-function mockReadFileFor(filePath: string, content: string) {
-  const readFile = (fs.readFile as any) as jest.Mock<Promise<string>, [string, string]>
-  readFile.mockReset()
-
-  readFile.mockImplementation(async (path, _encoding) => {
-    if (path === filePath) {
-      return content
-    } else {
-      throw createCodedError('', 'ENOENT')
-    }
-  })
-
-  return readFile
-}
 
 describe('createGeneratorSystemConfig', () => {
   beforeAll(() => {
@@ -131,7 +109,7 @@ describe('readGeneratorSystemConfig', () => {
   describe('when given no custom --config-file option', () => {
     describe('when .pcgen.json is available and valid', () => {
       it('should call readFile once and return the proper configuration', async () => {
-        const readFile = mockReadFileFor('.pcgen.json', JSON.stringify(dummyConfiguration))
+        const readFile = mockReadFileFor(fs.readFile, '.pcgen.json', JSON.stringify(dummyConfiguration))
 
         const config = await readGeneratorSystemConfig({}, consola)
         
@@ -143,7 +121,7 @@ describe('readGeneratorSystemConfig', () => {
 
     describe('when .pcgen.json is available and invalid', () => {
       it('should call readFile once and throw an error indicating error reading configuration', async () => {
-        const readFile = mockReadFileFor('.pcgen.json', "Invalid JSON content")
+        const readFile = mockReadFileFor(fs.readFile, '.pcgen.json', "Invalid JSON content")
 
         const configPromise = readGeneratorSystemConfig({}, consola)
 
@@ -155,7 +133,7 @@ describe('readGeneratorSystemConfig', () => {
 
     describe('when .pcgen is available and valid', () => {
       it('should call readFile twice and return the proper configuration', async () => {
-        const readFile = mockReadFileFor('.pcgen', JSON.stringify(dummyConfiguration))
+        const readFile = mockReadFileFor(fs.readFile, '.pcgen', JSON.stringify(dummyConfiguration))
 
         const config = await readGeneratorSystemConfig({}, consola)
         
@@ -168,7 +146,7 @@ describe('readGeneratorSystemConfig', () => {
 
     describe('when .pcgen is available and invalid', () => {
       it('should call readFile twice and throw an error indicating error reading configuration', async () => {
-        const readFile = mockReadFileFor('.pcgen', "Invalid JSON content")
+        const readFile = mockReadFileFor(fs.readFile, '.pcgen', "Invalid JSON content")
 
         const configPromise = readGeneratorSystemConfig({}, consola)
 
@@ -181,7 +159,7 @@ describe('readGeneratorSystemConfig', () => {
 
     describe('when .pcgenrc is available and valid', () => {
       it('should call readFile three times and return the proper configuration', async () => {
-        const readFile = mockReadFileFor('.pcgenrc', JSON.stringify(dummyConfiguration))
+        const readFile = mockReadFileFor(fs.readFile, '.pcgenrc', JSON.stringify(dummyConfiguration))
 
         const config = await readGeneratorSystemConfig({}, consola)
         
@@ -195,7 +173,7 @@ describe('readGeneratorSystemConfig', () => {
 
     describe('when .pcgenrc is available and invalid', () => {
       it('should call readFile three times and throw an error indicating error reading configuration', async () => {
-        const readFile = mockReadFileFor('.pcgenrc', "Invalid JSON content")
+        const readFile = mockReadFileFor(fs.readFile, '.pcgenrc', "Invalid JSON content")
 
         const configPromise = readGeneratorSystemConfig({}, consola)
 
@@ -209,7 +187,7 @@ describe('readGeneratorSystemConfig', () => {
 
     describe('when no config file is available', () => {
       it('should call readFile three times and throw an error indicating configuration file was not found', async () => {
-        const readFile = mockReadFileFor('other-file.txt', "Won't be read anyway")
+        const readFile = mockReadFileFor(fs.readFile, 'other-file.txt', "Won't be read anyway")
 
         const configPromise = readGeneratorSystemConfig({}, consola)
 
@@ -225,7 +203,7 @@ describe('readGeneratorSystemConfig', () => {
   describe('when given custom --config-file option', () => {
     describe('when .custom.pcgen.json is available and valid', () => {
       it('should call readFile once and return the proper configuration', async () => {
-        const readFile = mockReadFileFor('.custom.pcgen.json', JSON.stringify(dummyConfiguration))
+        const readFile = mockReadFileFor(fs.readFile, '.custom.pcgen.json', JSON.stringify(dummyConfiguration))
 
         const config = await readGeneratorSystemConfig({ configFile: '.custom.pcgen.json' }, consola)
         
@@ -237,7 +215,7 @@ describe('readGeneratorSystemConfig', () => {
 
     describe('when .custom.pcgen.json is available and invalid', () => {
       it('should call readFile once and throw an error indicating error reading configuration', async () => {
-        const readFile = mockReadFileFor('.custom.pcgen.json', "Invalid JSON content")
+        const readFile = mockReadFileFor(fs.readFile, '.custom.pcgen.json', "Invalid JSON content")
 
         const configPromise = readGeneratorSystemConfig({ configFile: '.custom.pcgen.json' }, consola)
 
@@ -249,7 +227,7 @@ describe('readGeneratorSystemConfig', () => {
 
     describe('when custom config file is not available', () => {
       it('should call readFile once and throw an error indicating configuration file was not found', async () => {
-        const readFile = mockReadFileFor('other-file.txt', "Won't be read anyway")
+        const readFile = mockReadFileFor(fs.readFile, 'other-file.txt', "Won't be read anyway")
 
         const configPromise = readGeneratorSystemConfig({ configFile: '.custom.pcgen.json' }, consola)
 

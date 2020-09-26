@@ -1,19 +1,10 @@
+/* istanbul ignore file */
 import consola, { Consola, LogLevel } from "consola";
-import commander from "commander";
 import { PCGenProgramOptions } from "./common";
 import chalk from "chalk";
 import { capitalCase } from "change-case";
 
-export function logLevelOption(command: commander.Command) {
-    command
-        .option(
-            '-l, --log-level <level>', 
-            'Log level. Any of: fatal or f, error or e, warning or warn or w, log or l, information or info or i, success or s, debug or d, trace or t, silent or verbose or v',
-            parseLogLevel,
-            LogLevel.Info)
-}
-
-function parseLogLevel(value: string) {
+export function parseLogLevel(value: string) {
     switch (value.toLowerCase()) {
         case "fatal":
         case "f":
@@ -89,18 +80,4 @@ export function printDetails(details?: any, indent: string = '') {
 export function tracedError(console: Consola, message: string) {
     console.error(message);
     return new Error(message)
-}
-
-export function shorten(text: string, maxLength: number, ellipsis: string = '...', writeLength: boolean = true) {
-    if (!text || text.length <= maxLength) {
-        return text
-    }
-
-    const lengthToWrite = writeLength ? ` [${text.length} chars]` : ''
-
-    if (ellipsis.length >= maxLength) {
-        return ellipsis.substring(0, maxLength) + lengthToWrite
-    }
-
-    return text.substring(0, maxLength - ellipsis.length) + ellipsis + lengthToWrite
 }

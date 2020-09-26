@@ -71,7 +71,7 @@ export function createConfigHelpers(config: GeneratorSystemConfig) {
   const baseFullPath = path.resolve(config.basePath);
 
   // /**/%CWD%/<relative-path>
-  const atCwdFullPath = (...paths: string[]) => joinPaths(cwd, ...paths);
+  const atCwdFullPath = (...paths: string[]) => path.resolve(joinPaths(cwd, ...paths));
 
   // %BASE_PATH%/_pcgen
   const pcgenPath = joinPaths(config.basePath, config.pcgenFolder);

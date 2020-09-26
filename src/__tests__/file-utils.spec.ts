@@ -24,12 +24,12 @@ import {
 jest.mock('fs-extra');
 
 describe('joinPaths', () => {
-  // beforeAll(() => {
-  //   consola.wrapAll();
-  // });
-  // beforeEach(() => {
-  //   consola.mockTypes(() => jest.fn());
-  // });
+  beforeAll(() => {
+    consola.wrapAll();
+  });
+  beforeEach(() => {
+    consola.mockTypes(() => jest.fn());
+  });
 
   it('should be a function', () => expect(typeof joinPaths).toBe('function'));
 

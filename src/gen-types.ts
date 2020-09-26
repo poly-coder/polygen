@@ -1,4 +1,5 @@
 import { Consola } from "consola";
+import { createConfigHelpers } from "./gen-configuration";
 import { CommandStep } from "./gen-steps";
 import { TemplateEngine } from "./generator-engines";
 
@@ -130,6 +131,8 @@ export interface IGeneratorsSystem {
     readonly listGenerators: (options: ListGeneratorsOptions) => Promise<string[]>;
 
     readonly runGenerator: (options: RunGeneratorOptions) => Promise<void>;
+
+    readonly configHelpers: ReturnType<typeof createConfigHelpers>
 }
 
 export interface RunCommandContext {

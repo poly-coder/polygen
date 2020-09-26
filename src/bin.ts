@@ -3,7 +3,8 @@ import { initCommand } from "./command-init";
 import { infoCommand } from "./command-info";
 import { listCommand } from "./command-list";
 import { newCommand } from "./command-new";
-import { logLevelOption } from "./logging";
+import { parseLogLevel } from "./logging";
+import { LogLevel } from "consola";
 
 const mainProgram = new Command();
 
@@ -13,8 +14,12 @@ mainProgram
     .name('pcgen')
     .description('Polyglot code generator, based on models and templates you can own')
     .option('--config-file', 'Configuration file name for pcgen. Defaults to ".pcgen.json"')
+    .option(
+        '-l, --log-level <level>', 
+        'Log level. Any of: fatal or f, error or e, warning or warn or w, log or l, information or info or i, success or s, debug or d, trace or t, silent or verbose or v',
+        parseLogLevel,
+        LogLevel.Info)
     .action(async (args) => args.help())
-logLevelOption(mainProgram)
 
 initCommand(mainProgram);
 listCommand(mainProgram);

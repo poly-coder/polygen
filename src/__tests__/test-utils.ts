@@ -120,6 +120,62 @@ export function mockWriteFileFor(
   );
 }
 
+export type CopyFileFunc = (
+  source: string,
+  target: string
+) => Promise<void>;
+export type CopyFileNotFound = (
+  source?: string,
+  target?: string
+) => void | Promise<void>;
+
+export type CopyFileContent =
+  | 'yes'
+  | 'no'
+  | ((source: string, target: string) => void | Promise<void>);
+
+export function mockCopyFilesFor(
+  copy: CopyFileFunc,
+  files: Record<string, CopyFileContent>,
+  notFound?: CopyFileNotFound
+) {
+  const copyMock = (copy as any) as jest.Mock<
+    Promise<void>,
+    [string, string]
+  >;
+  copyMock.mockReset();
+
+  copyMock.mockImplementation(async (source, target) => {
+    const current = files[source] ?? files[target];
+    if (current === 'yes') {
+      return;
+    } else if (current === 'no') {
+      throw createCodedError('', 'NOACCESS')
+    } else if (typeof current === 'function') {
+      return await current(source, target);
+    } else if (notFound) {
+      await notFound(source, target);
+    }
+  });
+
+  return copyMock;
+}
+
+export function mockCopyFileFor(
+  copy: CopyFileFunc,
+  filePath: string,
+  current?: CopyFileContent,
+  notFound?: CopyFileNotFound
+) {
+  return mockCopyFilesFor(
+    copy,
+    {
+      [filePath]: current || 'yes',
+    },
+    notFound
+  );
+}
+
 export type StatsFunc = (filePath: string) => Promise<fs.Stats>;
 export type StatsNotFound = (filePath?: string) => fs.Stats | Promise<fs.Stats>;
 
@@ -227,4 +283,106 @@ export function mockReadDirFor(
     },
     notFound
   );
+}
+
+export type EnsureDirFunc = (filePath: string) => Promise<void>;
+export type EnsureDirNotFound = (file?: string) => void | Promise<void>;
+
+export type EnsureDirContent =
+  | string
+  | ((file: string) => void | Promise<void>);
+
+export function mockEnsureDirsFor(
+  ensureDir: EnsureDirFunc,
+  files: Record<string, EnsureDirContent>,
+  notFound?: EnsureDirNotFound
+) {
+  const ensureDirMock = (ensureDir as any) as jest.Mock<
+    Promise<void>,
+    [string]
+  >;
+  ensureDirMock.mockReset();
+
+  ensureDirMock.mockImplementation(async (filePath) => {
+    const current = files[filePath];
+    if (typeof current === 'string') {
+      return;
+    } else if (typeof current === 'function') {
+      return await current(filePath);
+    } else if (notFound) {
+      await notFound(filePath);
+    }
+  });
+
+  return ensureDirMock;
+}
+
+export function mockEnsureDirFor(
+  ensureDir: EnsureDirFunc,
+  filePath: string,
+  current?: EnsureDirContent,
+  notFound?: EnsureDirNotFound
+) {
+  return mockEnsureDirsFor(
+    ensureDir,
+    {
+      [filePath]: current || '',
+    },
+    notFound
+  );
+}
+
+export interface AbstractFileSystem {
+  readFile: ReadFileFunc;
+  writeFile: WriteFileFunc;
+  readdir: ReadDirFunc;
+  stat: StatsFunc;
+  ensureDir: EnsureDirFunc;
+  copy: CopyFileFunc;
+}
+
+export interface AbstractFileSystemConfig {
+  readFile?: Record<string, ReadFileContent>;
+  readFileNotFound?: ReadFileNotFound;
+  writeFile?: Record<string, WriteFileContent>;
+  writeFileNotFound?: WriteFileNotFound;
+  readdir?: Record<string, ReadDirContent>;
+  readdirNotFound?: ReadDirNotFound;
+  stat?: Record<string, StatsContent>;
+  statNotFound?: StatsNotFound;
+  ensureDir?: Record<string, EnsureDirContent>;
+  ensureDirNotFound?: EnsureDirNotFound;
+  copy?: Record<string, CopyFileContent>;
+  copyNotFound?: CopyFileNotFound;
+}
+
+export function mockFileSystem(
+  fileSystem: AbstractFileSystem,
+  config?: AbstractFileSystemConfig,
+) {
+  const readFile = mockReadFilesFor(fileSystem.readFile, config?.readFile ?? {}, config?.readFileNotFound)
+  const writeFile = mockWriteFilesFor(fileSystem.writeFile, config?.writeFile ?? {}, config?.writeFileNotFound)
+  const readdir = mockReadDirsFor(fileSystem.readdir, config?.readdir ?? {}, config?.readdirNotFound)
+  const stat = mockStatsFor(fileSystem.stat, config?.stat ?? {}, config?.statNotFound)
+  const ensureDir = mockEnsureDirsFor(fileSystem.ensureDir, config?.ensureDir ?? {}, config?.ensureDirNotFound)
+  const copy = mockCopyFilesFor(fileSystem.copy, config?.copy ?? {}, config?.copyNotFound)
+
+  const hasNotBeenCalled = () => {
+    expect(readFile).not.toHaveBeenCalled();
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(readdir).not.toHaveBeenCalled();
+    expect(stat).not.toHaveBeenCalled();
+    expect(ensureDir).not.toHaveBeenCalled();
+    expect(copy).not.toHaveBeenCalled();
+  }
+
+  return {
+    readFile,
+    writeFile,
+    readdir,
+    stat,
+    ensureDir,
+    copy,
+    hasNotBeenCalled,
+  }
 }

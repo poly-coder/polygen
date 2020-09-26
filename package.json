@@ -14,7 +14,7 @@
     "pcgen-time": "./bin/cli-time"
   },
   "scripts": {
-    "clean:pcgen": "rimraf _pcgen .pcgen.json",
+    "clean:pcgen": "rimraf _pcgen .pcgen.js",
     "dev:watch": "tsc --watch",
     "build:clean": "rimraf dist output",
     "build:dist": "tsc",

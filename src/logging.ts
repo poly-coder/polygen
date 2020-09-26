@@ -1,6 +1,5 @@
 /* istanbul ignore file */
-import consola, { Consola, LogLevel } from "consola";
-import { PCGenProgramOptions } from "./common";
+import consola, { LogLevel } from "consola";
 import chalk from "chalk";
 import { capitalCase } from "change-case";
 
@@ -51,33 +50,31 @@ export function parseLogLevel(value: string) {
     return LogLevel.Info;
 }
 
-export function getConsola(opts: PCGenProgramOptions) {
-    return consola.create({
-        level: opts.logLevel,
-    })
-}
-
 export function printField(key: string, value: any, indent: string = '') {
-    if (value == null || value == undefined) {
-        return
-    }
-    if ((key + value).length > 40) {
-        console.log(`${indent}    ${chalk.white(key)}:`)
-        console.log(`${indent}        ${chalk.gray(value)}`)
-    } else {
-        console.log(`${indent}    ${chalk.white(key)}: ${chalk.gray(value)}`)
-    }
+  if (value == null || value == undefined) {
+      return
+  }
+  if ((key + value).length > 40) {
+      consola.log(`${indent}    ${chalk.white(key)}:`)
+      consola.log(`${indent}        ${chalk.gray(value)}`)
+  } else {
+      consola.log(`${indent}    ${chalk.white(key)}: ${chalk.gray(value)}`)
+  }
 }
 
 export function printDetails(details?: any, indent: string = '') {
-    if (details) {
-        for (const [key, value] of Object.entries(details)) {
-            printField(capitalCase(key), value, indent);
-        }
-    }
+  if (details) {
+      for (const [key, value] of Object.entries(details)) {
+          printField(capitalCase(key), value, indent);
+      }
+  }
 }
 
-export function tracedError(console: Consola, message: string) {
-    console.error(message);
-    return new Error(message)
+export function tracedError(message: string) {
+  consola.error(message);
+  return new Error(message)
+}
+
+export function createLogPrefix(name: string) {
+  return chalk`{cyan ${name}}`
 }

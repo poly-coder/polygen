@@ -1,15 +1,10 @@
-import { LogLevel } from "consola";
+import { GlobalOptions } from "./types";
 
-export interface PCGenProgramOptions {
-    readonly version: string;
-    readonly logLevel: LogLevel;
-}
+export function getOptions<T extends GlobalOptions>(args: any): T {
+  const parentOpts = args.parent ? getOptions(args.parent) : {};
 
-export function getOptions<T extends PCGenProgramOptions>(args: any): T {
-    const parentOpts = args.parent ? getOptions(args.parent) : {};
-
-    return {
-        ...parentOpts,
-        ...args.opts(),
-    };
+  return {
+      ...parentOpts,
+      ...args.opts(),
+  };
 }

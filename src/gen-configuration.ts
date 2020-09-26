@@ -1,4 +1,4 @@
-import { GeneratorSystemConfig, GlobalOptions, Variables } from './gen-types';
+import { GeneratorSystemConfig, GlobalOptions } from './gen-types';
 import path from 'path';
 import { Consola } from 'consola';
 import { fsReadFileContent, joinPaths } from './file-utils';
@@ -132,66 +132,5 @@ export function createConfigHelpers(config: GeneratorSystemConfig) {
     // // itemFullPath,
     atCommandsPath,
     atTemplatesPath,
-
-    vars: {
-      CWD: cwd,
-      PWD: cwd,
-      BASE_PATH: config.basePath,
-      BASE_FULLPATH: baseFullPath,
-
-      PCGEN_FOLDER: config.pcgenFolder,
-      // PCGEN_PATH: pcgenPath,
-      // PCGEN_FULLPATH: pcgenFullPath,
-      GENERATOR_FOLDER: config.generatorFolder,
-      COMMANDS_FOLDER: config.commandsFolder,
-      TEMPLATES_FOLDER: config.templatesFolder,
-      DEFAULT_COMMAND: config.defaultCommand,
-    } as Variables,
   };
-}
-
-export function createGeneratorConfigHelpers(
-  parent: ReturnType<typeof createConfigHelpers>,
-  generatorName: string,
-  generatorFullPath: string
-) {
-  return {
-    ...parent,
-    generatorName,
-    generatorFullPath,
-
-    vars: {
-      ...parent.vars,
-      GENERATOR_NAME: generatorName,
-      GENERATOR_FULLPATH: generatorFullPath,
-    } as Variables,
-  };
-}
-
-export function extractVariables(helpers: any): Variables {
-  return Object.values(helpers)
-    .map((h: any) => h['vars'])
-    .filter(
-      (vars) =>
-        !!vars && typeof vars === 'object' && vars.constructor === Object
-    )
-    .reduce((accum, vars) => ({ ...accum, ...vars }), {} as Variables);
-}
-
-export function replaceVariables(
-  text: string,
-  ...variables: Variables[]
-): string {
-  return text.replace(
-    /%([A-Za-z_][A-Za-z_0-9]*)%/,
-    (substring: string, varName: string): string => {
-      for (const vars of variables) {
-        const result = vars[varName];
-        if (result) {
-          return result;
-        }
-      }
-      return substring;
-    }
-  );
 }

@@ -1,9 +1,12 @@
 import consola from 'consola';
 import fs from 'fs-extra';
+import path from 'path';
 import {
+  createConfigHelpers,
   createGeneratorSystemConfig,
   readGeneratorSystemConfig,
 } from '../gen-configuration';
+import { GeneratorSystemConfig } from '../gen-types';
 
 jest.mock('fs-extra');
 
@@ -254,6 +257,109 @@ describe('readGeneratorSystemConfig', () => {
         expect(readFile).toHaveBeenCalledTimes(1)
         expect(readFile).toHaveBeenNthCalledWith(1, '.custom.pcgen.json', 'utf-8')
       });
+    });
+  });
+});
+
+describe('createConfigHelpers', () => {
+  beforeAll(() => {
+    consola.wrapAll();
+  });
+  beforeEach(() => {
+    consola.mockTypes(() => jest.fn());
+  });
+  
+  it('is a function', async () =>
+    expect(typeof createConfigHelpers).toBe('function'));
+
+  describe('when called with default configuration', () => {
+    let config: GeneratorSystemConfig = {
+      basePath: 'base-path',
+      cwd: 'cwd',
+      commandsFolder: 'cmd',
+      templatesFolder: 'tpl',
+      defaultCommand: 'create',
+      generatorFolder: 'gen',
+      pcgenFolder: '_pcg',
+      initAssets: 'ast',
+      searchPaths: [],
+    }
+
+    it('it should return a value', () => {
+      const helpers = createConfigHelpers(config)
+      expect(helpers).not.toBeFalsy()
+    });
+
+    it('cwd should be the absolute path to Current Working Directory ', () => {
+      const helpers = createConfigHelpers(config)
+      expect(helpers.cwd).toBe(path.resolve(config.cwd))
+    });
+
+    it('baseFullPath should be the absolute path to Base Path ', () => {
+      const helpers = createConfigHelpers(config)
+      expect(helpers.baseFullPath).toBe(path.resolve(config.basePath))
+    });
+
+    it('pcgenPath should be the relative path to pcgen folder ', () => {
+      const helpers = createConfigHelpers(config)
+      expect(helpers.pcgenPath).toBe(path.join(config.basePath, config.pcgenFolder))
+    });
+
+    it('pcgenFullPath should be the absolute path to pcgen folder at Base Path', () => {
+      const helpers = createConfigHelpers(config)
+      expect(helpers.pcgenFullPath).toBe(path.join(helpers.baseFullPath, config.pcgenFolder))
+    });
+    
+    it('atCwdFullPath should be a function', () => {
+      const helpers = createConfigHelpers(config)
+      expect(typeof helpers.atCwdFullPath).toBe('function')
+    });
+
+    it('atCwdFullPath should return the absolute path based on CWD', () => {
+      const helpers = createConfigHelpers(config)
+      expect(helpers.atCwdFullPath('relative/path')).toBe(path.join(helpers.cwd, 'relative/path'))
+    });
+    
+    it('atPcgenPath should be a function', () => {
+      const helpers = createConfigHelpers(config)
+      expect(typeof helpers.atPcgenPath).toBe('function')
+    });
+
+    it('atPcgenPath should return the relative path based on pcgen folder', () => {
+      const helpers = createConfigHelpers(config)
+      expect(helpers.atPcgenPath('relative/path')).toBe(path.join(helpers.pcgenPath, 'relative/path'))
+    });
+    
+    it('atPcgenFullPath should be a function', () => {
+      const helpers = createConfigHelpers(config)
+      expect(typeof helpers.atPcgenFullPath).toBe('function')
+    });
+
+    it('atPcgenFullPath should return the absolute path based on pcgen folder', () => {
+      const helpers = createConfigHelpers(config)
+      expect(helpers.atPcgenFullPath('relative/path')).toBe(path.join(helpers.pcgenFullPath, 'relative/path'))
+    });
+    
+    it('atCommandsPath should be a function', () => {
+      const helpers = createConfigHelpers(config)
+      expect(typeof helpers.atCommandsPath).toBe('function')
+    });
+
+    it('atCommandsPath should return the absolute path based on given generator full path and config commands folder', () => {
+      const helpers = createConfigHelpers(config)
+      expect(helpers.atCommandsPath(helpers.atPcgenFullPath('my-generator'), 'my-command.js'))
+        .toBe(path.join(helpers.pcgenFullPath, 'my-generator', config.commandsFolder, 'my-command.js'))
+    });
+    
+    it('atTemplatesPath should be a function', () => {
+      const helpers = createConfigHelpers(config)
+      expect(typeof helpers.atTemplatesPath).toBe('function')
+    });
+
+    it('atTemplatesPath should return the absolute path based on given generator full path and config templates folder', () => {
+      const helpers = createConfigHelpers(config)
+      expect(helpers.atTemplatesPath(helpers.atPcgenFullPath('my-generator'), 'my-template.ejs'))
+        .toBe(path.join(helpers.pcgenFullPath, 'my-generator', config.templatesFolder, 'my-template.ejs'))
     });
   });
 });

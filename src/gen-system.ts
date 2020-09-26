@@ -26,14 +26,11 @@ import {
   RunCommandFunc,
   RunCommandResult,
   RunGeneratorOptions,
-  Variables,
 } from './gen-types';
 import {
   createConfigHelpers,
   createGeneratorSystemConfig,
-  extractVariables,
   pcgenConfigFileNames,
-  replaceVariables,
 } from './gen-configuration';
 import { shorten, tracedError } from './logging';
 import {
@@ -62,13 +59,6 @@ export function createGeneratorsSystem(
     inflection,
     humanize,
   };
-
-  // console.trace('config', config);
-  // console.trace('helpers.config', helpers.config);
-  // console.trace('helpers', helpers);
-
-  const variables = extractVariables(helpers);
-  // console.trace('variables', variables);
 
   const isInitialized = async () => {
     for (const fileName of pcgenConfigFileNames) {
@@ -285,7 +275,6 @@ export function createGeneratorsSystem(
   const readGeneratorDescriptorDataAsJson = async (
     generatorName: string,
     generatorFullPath: string,
-    ...variables: Variables[]
   ): Promise<GeneratorDescriptorData> => {
     const fileFullPath = joinPaths(
       generatorFullPath,
@@ -296,9 +285,7 @@ export function createGeneratorsSystem(
       const jsonContent = await fsReadFileContent(fileFullPath);
 
       if (jsonContent) {
-        const data: GeneratorDescriptorData = JSON.parse(
-          replaceVariables(jsonContent, ...variables)
-        );
+        const data: GeneratorDescriptorData = JSON.parse(jsonContent);
 
         console.trace(
           'readGeneratorDescriptorAsJson: Read from ',
@@ -367,8 +354,6 @@ export function createGeneratorsSystem(
     const generatorData = await readGeneratorDescriptorDataAsJson(
       generatorName,
       generatorFullPath,
-      variables,
-      helpers.env
     );
 
     const generator = createGeneratorDescriptor(

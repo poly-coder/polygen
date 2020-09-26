@@ -55,10 +55,10 @@ export function printField(key: string, value: any, indent: string = '') {
       return
   }
   if ((key + value).length > 40) {
-      consola.log(`${indent}    ${chalk.white(key)}:`)
-      consola.log(`${indent}        ${chalk.gray(value)}`)
+      consola.log(chalk`${indent}    {white ${key}}:`)
+      consola.log(chalk`${indent}        {gray ${value}}`)
   } else {
-      consola.log(`${indent}    ${chalk.white(key)}: ${chalk.gray(value)}`)
+      consola.log(chalk`${indent}    {white ${key}}: {gray ${value}}`)
   }
 }
 

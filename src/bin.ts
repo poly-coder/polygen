@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { initCommand } from "./command-init";
-// import { infoCommand } from "./command-info";
-// import { listCommand } from "./command-list";
+import { infoCommand } from "./command-info";
+import { listCommand } from "./command-list";
 // import { newCommand } from "./command-new";
 import { parseLogLevel } from "./logging";
 import { LogLevel } from "consola";
@@ -22,8 +22,8 @@ mainProgram
     .action(async (args) => args.help())
 
 initCommand(mainProgram);
-// listCommand(mainProgram);
-// infoCommand(mainProgram);
+listCommand(mainProgram);
+infoCommand(mainProgram);
 // newCommand(mainProgram);
 
 mainProgram.parse(process.argv);

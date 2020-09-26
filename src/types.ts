@@ -6,9 +6,9 @@ export interface GlobalOptions {
   readonly version: string;
 }
 
-export interface InitOptions extends GlobalOptions {
+export interface InitOptionsOnly {
   readonly searchPaths?: string[];
-  readonly basePath?: string;
+  // readonly basePath?: string;
   readonly pcgenFolder?: string;
   readonly generatorFolder?: string;
   readonly commandsFolder?: string;
@@ -18,15 +18,21 @@ export interface InitOptions extends GlobalOptions {
   readonly initAssets?: string;
 }
 
-export interface ListOptions extends GlobalOptions {
+export interface InitOptions extends GlobalOptions, InitOptionsOnly {}
+
+export interface ListOptionsOnly {
   readonly name?: string;
 }
 
-export interface InfoOptions extends GlobalOptions {
+export interface ListOptions extends GlobalOptions, ListOptionsOnly {}
+
+export interface InfoOptionsOnly {
   readonly generatorName?: string;
 }
 
-export interface RunOptions extends GlobalOptions {
+export interface InfoOptions extends GlobalOptions, InfoOptionsOnly {}
+
+export interface RunOptionsOnly {
   readonly name?: string;
   readonly generator: string;
   readonly step?: string;
@@ -40,43 +46,9 @@ export interface RunOptions extends GlobalOptions {
   readonly stdout?: boolean;
 }
 
-export interface ICompleteConfigurationFile {
-  /**
-   * Paths where to locate generators
-   */
-  readonly searchPaths: readonly string[];
-  /**
-   * Paths where to locate local generators and create new ones. Created with pcgen init
-   */
-  readonly basePath: string;
-  /**
-   * pcgen folder where generators are located, relative to base path. Default: '_pcgen'
-   */
-  readonly pcgenFolder: string;
-  /**
-   * generator folder where init generator is located, relative to pcgen path. Default: 'generator'
-   */
-  readonly generatorFolder: string;
-  /**
-   * commands folder where commands are located, relative to generator folder. Default: 'commands'
-   */
-  readonly commandsFolder: string;
-  /**
-   * templates folder where templates are located, relative to generator folder. Default: 'templates'
-   */
-  readonly templatesFolder: string;
-  /**
-   * default command used when a generator is executed. Default: 'new'
-   */
-  readonly defaultCommand: string;
-  /**
-   * current working directory where new files are generated relative to it. Default: 'process.cwd()'
-   */
-  readonly cwd: string;
-  /**
-   * initAssets folder where initializer generator is located.
-   */
-  readonly initAssets: string;
+export interface RunOptions extends GlobalOptions, RunOptionsOnly {}
+
+export interface ICompleteConfigurationFile extends Required<InitOptionsOnly> {
 }
 
-export type IConfigurationFile  = Partial<ICompleteConfigurationFile>
+export type IConfigurationFile = Partial<ICompleteConfigurationFile>;

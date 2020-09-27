@@ -50,15 +50,51 @@ export function parseLogLevel(value: string) {
     return LogLevel.Info;
 }
 
+export function sprintList(list: string[], style: chalk.Chalk, sep: string = ', ') {
+    return list.map(value => style(value)).join(sep)
+}
+
+export function sprintGoodList(list: string[], sep: string = ', ') {
+    return sprintList(list, chalk.greenBright, sep)
+}
+
+export function sprintBadList(list: any[], sep: string = ', ') {
+    return sprintList(list, chalk.redBright, sep)
+}
+
+export function sprintGood(value: any) {
+    return chalk.greenBright(value)
+}
+
+export function sprintBad(value: any) {
+    return chalk.redBright(value)
+}
+
+export function sprintWarn(value: any) {
+    return chalk.yellowBright(value)
+}
+
+export function sprintInfo(value: any) {
+    return chalk.cyanBright(value)
+}
+
+export function sprintLabel(value: any) {
+    return chalk.white(value)
+}
+
+export function sprintDark(value: any) {
+    return chalk.gray(value)
+}
+
 export function printField(key: string, value: any, indent: string = '') {
   if (value == null || value == undefined) {
       return
   }
   if ((key + value).length > 40) {
-      consola.log(chalk`${indent}    {white ${key}}:`)
-      consola.log(chalk`${indent}        {gray ${value}}`)
+      consola.log(chalk`${indent}    ${sprintLabel(key)}:`)
+      consola.log(chalk`${indent}        ${sprintInfo(value)}`)
   } else {
-      consola.log(chalk`${indent}    {white ${key}}: {gray ${value}}`)
+      consola.log(chalk`${indent}    ${sprintLabel(key)}: ${sprintInfo(value)}`)
   }
 }
 
@@ -76,5 +112,5 @@ export function tracedError(message: string) {
 }
 
 export function createLogPrefix(name: string) {
-  return chalk`{cyan ${name}}`
+  return sprintInfo(name)
 }

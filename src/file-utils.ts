@@ -1,5 +1,6 @@
 import pathModule from 'path';
 import fs from 'fs-extra';
+import glob from 'glob';
 
 export function joinPaths(...paths: string[]): string {
   for (let index = paths.length - 1; index > 0; index--) {
@@ -89,4 +90,26 @@ export function fsListDirectories(path: string): Promise<string[]> {
   return fsReadDir(path, (file) =>
     fsExistsAsDirectory(pathModule.join(path, file))
   );
+}
+
+export async function globFiles(basePath: string, filePattern: string): Promise<string[]> {
+  try {
+    const result = await new Promise<string[]>((resolve, reject) => {
+      glob(joinPaths(basePath, filePattern), (error, matches) => {
+        if (error) {
+          reject(error)
+        } else {
+          resolve(matches)
+        }
+      })
+    }) 
+    
+    return result;
+  } catch (error) {
+    if (error.code == 'ENOENT') {
+      return [];
+    } else {
+      throw error;
+    }
+  }
 }

@@ -7,26 +7,52 @@ import path from 'path';
 import {
   fsExistsAsFile,
   fsListDirectories,
+  fsReadFileContent,
   fsWriteFileContent,
+  globFiles,
   joinPaths,
 } from './file-utils';
-import { createLogPrefix, printField } from './logging';
 import {
+  createLogPrefix,
+  printDetails,
+  printField,
+  sprintBad,
+  sprintBadList,
+  sprintGood,
+  sprintGoodList,
+  sprintInfo,
+  sprintLabel,
+} from './logging';
+import { defaultModelLoaders } from './model-loaders';
+import {
+  CommandMode,
   GlobalOptions,
+  ICommand,
+  ICommandModel,
   IConfiguration,
   IConfigurationFile,
   IGenerator,
+  IGeneratorModelFile,
+  IModelLoaderConfig,
   InfoOptions,
   InitOptions,
+  InitOptionsOnly,
   ListOptions,
+  OutputOptionsOnly,
   PrintOptionsOnly,
   SearchOptionsOnly,
+  Variables,
 } from './types';
 
 const defaultGlobalOptions: Required<GlobalOptions> = {
   configFile: 'pcgen.js',
   logLevel: LogLevel.Info,
   version: '',
+};
+
+const defaultOutputOptions: Required<OutputOptionsOnly> = {
+  outDir: '.',
+  overwrite: false,
 };
 
 const defaultSearchOptions: Required<SearchOptionsOnly> = {
@@ -64,7 +90,9 @@ export async function loadConfigurationFile(
 
     if (typeof configModule?.default !== 'function') {
       consola.log(
-        chalk`${logPrefix}: {red ${'Configuration file must export a default function to return configuration'}}`
+        chalk`${logPrefix}: ${sprintBad(
+          'Configuration file must export a default function to return configuration'
+        )}`
       );
     }
 
@@ -75,7 +103,7 @@ export async function loadConfigurationFile(
     return config;
   } catch (error) {
     consola.log(
-      chalk`Error trying to load configuration file {red '${configFile}'}`
+      chalk`Error trying to load configuration file '${sprintBad(configFile)}'`
     );
     consola.log(error);
 
@@ -85,6 +113,7 @@ export async function loadConfigurationFile(
 
 const defaultInitOptions: Required<InitOptions> = {
   ...defaultGlobalOptions,
+  ...defaultOutputOptions,
   cwd: '.',
   outDir: '.',
   generatorFolder: 'generator',
@@ -118,75 +147,313 @@ export async function initialize(options: InitOptions) {
 
   if (config) {
     consola.log(
-      chalk`{green ${'PCGen configuration file is already initialized'}}`
+      chalk`${sprintGood('PCGen configuration file is already initialized')}`
     );
-  } else {
-    consola.log(chalk`Initializing PCGen configuration ...`);
-
-    const sourceFolder = initOptions.initAssets;
-    const pcgenPath = initOptions.pcgenFolder;
-
-    // Copy assets/generator folder
-
-    const sourceGenerator = path.join(sourceFolder, 'generator');
-    const targetGenerator = path.join(pcgenPath, initOptions.generatorFolder);
-
-    consola.trace(
-      chalk`${logPrefix}: copy {green '${sourceGenerator}'} to {green '${targetGenerator}'}`
-    );
-    await fs.copy(sourceGenerator, targetGenerator);
-
-    // Copy assets/.gitignore
-
-    const sourceGitIgnore = path.join(sourceFolder, '_gitignore');
-    const targetGitIgnore = path.join(pcgenPath, '.gitignore');
-
-    consola.trace(
-      chalk`${logPrefix}: copy {green '${sourceGitIgnore}'} to {green '${targetGitIgnore}'}`
-    );
-    await fs.copy(sourceGitIgnore, targetGitIgnore);
-
-    // Create pcgen.js config file
-
-    const sourceConfigTemplate = path.join(sourceFolder, 'pcgen.js.ejs');
-    const targetConfig = path.join(initOptions.configFile);
-
-    consola.trace(chalk`${logPrefix}: generate {green '${targetConfig}'}`);
-    const configContent = await ejs.renderFile(sourceConfigTemplate, {
-      json5: json5,
-      config: {
-        cwd: initOptions.cwd,
-        outDir: initOptions.outDir,
-        generatorFolder: initOptions.generatorFolder,
-        commandsFolder: initOptions.commandsFolder,
-        templatesFolder: initOptions.templatesFolder,
-        defaultCommand: initOptions.defaultCommand,
-        initAssets: initOptions.initAssets,
-        pcgenFolder: initOptions.pcgenFolder,
-        searchPaths: initOptions.searchPaths,
-      },
-    });
-
-    await fsWriteFileContent(targetConfig, configContent);
-
-    consola.log(chalk`{green ${'PCGen configuration initialized!'}}`);
+    return;
   }
+
+  consola.log(chalk`Initializing PCGen configuration ...`);
+
+  const sourceFolder = initOptions.initAssets;
+  const pcgenPath = initOptions.pcgenFolder;
+
+  // Copy assets/generator folder
+
+  const sourceGenerator = path.join(sourceFolder, 'generator');
+  const targetGenerator = path.join(pcgenPath, initOptions.generatorFolder);
+
+  consola.trace(
+    chalk`${logPrefix}: copy '${sprintGood(sourceGenerator)}'} to '${sprintGood(
+      targetGenerator
+    )}'`
+  );
+  await fs.copy(sourceGenerator, targetGenerator);
+
+  // Copy assets/.gitignore
+
+  const sourceGitIgnore = path.join(sourceFolder, '_gitignore');
+  const targetGitIgnore = path.join(pcgenPath, '.gitignore');
+
+  consola.trace(
+    chalk`${logPrefix}: copy '${sprintGood(sourceGitIgnore)}' to '${sprintGood(
+      targetGitIgnore
+    )}'`
+  );
+  await fs.copy(sourceGitIgnore, targetGitIgnore);
+
+  // Create pcgen.js config file
+
+  const sourceConfigTemplate = path.join(sourceFolder, 'pcgen.js.ejs');
+  const targetConfig = path.join(initOptions.configFile);
+
+  consola.trace(chalk`${logPrefix}: generate '${sprintGood(targetConfig)}'`);
+  const configContent = await ejs.renderFile(sourceConfigTemplate, {
+    json5: json5,
+    config: {
+      cwd: initOptions.cwd,
+      outDir: initOptions.outDir,
+      generatorFolder: initOptions.generatorFolder,
+      commandsFolder: initOptions.commandsFolder,
+      templatesFolder: initOptions.templatesFolder,
+      defaultCommand: initOptions.defaultCommand,
+      initAssets: initOptions.initAssets,
+      pcgenFolder: initOptions.pcgenFolder,
+      searchPaths: initOptions.searchPaths,
+    },
+  });
+
+  await fsWriteFileContent(targetConfig, configContent);
+
+  consola.log(sprintGood('PCGen configuration initialized!'));
 }
 
-function requiredConfig(config: IConfigurationFile): IConfiguration {
-  const requiredConfig: Required<IConfigurationFile> = {
+export function replaceTextVariables(
+  text: string,
+  ...variables: Variables[]
+): string {
+  return text.replace(
+    /%([A-Za-z_][A-Za-z_0-9]*)%/,
+    (substring: string, varName: string): string => {
+      for (const vars of variables) {
+        const result = vars[varName];
+        if (result) {
+          return result;
+        }
+      }
+      return substring;
+    }
+  );
+}
+
+function createModelLoaders(config: IConfigurationFile, variables: Variables) {
+  const logPrefix = createLogPrefix('createModelLoaders');
+
+  const byName = new Map<string, IModelLoaderConfig>();
+  const byExtension = new Map<string, IModelLoaderConfig>();
+
+  for (const loader of config.modelLoaders ?? []) {
+    const extensions = loader.extensions
+      ? sprintGoodList(loader.extensions)
+      : sprintBad('None');
+    consola.trace(
+      chalk`${logPrefix}: Module loader '${sprintGood(
+        loader.name
+      )}' for extensions: ${extensions}`
+    );
+
+    if (byName.has(loader.name)) {
+      consola.warn(
+        chalk`There are multiple model loaders with name '${sprintBad(
+          loader.name
+        )}'`
+      );
+    } else {
+      byName.set(loader.name, loader);
+    }
+
+    for (const extension of loader.extensions ?? []) {
+      if (byExtension.has(extension)) {
+        consola.warn(
+          chalk`There are multiple model loaders with extension '${sprintBad(
+            extension
+          )}'`
+        );
+      } else {
+        byExtension.set(extension, loader);
+      }
+    }
+  }
+
+  for (const loader of config.useDefaultModelLoaders === false
+    ? []
+    : defaultModelLoaders) {
+    const extensions = loader.extensions
+      ? sprintGoodList(loader.extensions)
+      : sprintBad('None');
+    consola.trace(
+      chalk`${logPrefix}: Default module loader '${sprintGood(
+        loader.name
+      )}' for extensions: ${extensions}`
+    );
+
+    if (!byName.has(loader.name)) {
+      byName.set(loader.name, loader);
+    }
+
+    for (const extension of loader.extensions ?? []) {
+      if (!byExtension.has(extension)) {
+        byExtension.set(extension, loader);
+      }
+    }
+  }
+
+  const loadModelFromContent = async (
+    content: string,
+    loaderName: string,
+    isOptional?: boolean,
+    replaceVariables?: boolean
+  ): Promise<any | undefined> => {
+    const errorLogger = isOptional === true ? consola.trace : consola.log;
+
+    const loader = byName.get(loaderName);
+
+    if (!loader) {
+      errorLogger(
+        chalk`There is no model loader register for name '${sprintBad(
+          loaderName
+        )}'`
+      );
+      return undefined;
+    }
+
+    try {
+      if (loader.fromContent) {
+        const text = await loader.fromContent(content);
+        // Replace variables by default
+        if (replaceVariables !== false) {
+          return replaceTextVariables(text, variables);
+        }
+
+        return text;
+      }
+
+      errorLogger(
+        chalk`Model loader '${sprintBad(
+          loaderName
+        )}' cannot load from content. You need to pass the filePath.`
+      );
+      return undefined;
+    } catch (error) {
+      consola.error(
+        chalk`Error loading model of type '${sprintBad(loaderName)}'`
+      );
+      consola.trace(error);
+    }
+  };
+
+  const loadModelFromPath = async (
+    filePath: string,
+    loaderName?: string,
+    isOptional?: boolean,
+    replaceVariables?: boolean
+  ): Promise<any | undefined> => {
+    const errorLogger = isOptional === true ? consola.trace : consola.log;
+
+    const extension = path.extname(filePath);
+
+    const loader = loaderName
+      ? byName.get(loaderName)
+      : byExtension.get(extension);
+
+    if (!loader) {
+      errorLogger(
+        chalk`There is no model loader register for name '${sprintBad(
+          loaderName
+        )}' or extension '${sprintBad(extension)}'`
+      );
+      return undefined;
+    }
+
+    try {
+      if (!(await fsExistsAsFile(filePath))) {
+        errorLogger(chalk`File '${sprintBad(filePath)}' does not exist`);
+        return undefined;
+      }
+
+      if (loader.fromPath) {
+        return await loader.fromPath(filePath);
+      }
+
+      if (loader.fromContent) {
+        const content = await fsReadFileContent(filePath);
+
+        if (content === undefined) {
+          errorLogger(
+            chalk`Cannot read content of model file '${sprintBad(filePath)}'.`
+          );
+          return undefined;
+        }
+
+        if (replaceVariables === true) {
+          const text = replaceTextVariables(content, variables);
+          return await loader.fromContent(text);
+        }
+
+        return await loader.fromContent(content);
+      }
+
+      errorLogger(
+        chalk`Model loader '${sprintBad(
+          loader.name
+        )}' does not define any load function.`
+      );
+      return undefined;
+    } catch (error) {
+      consola.error(
+        chalk`Error loading model of type '${sprintBad(loader.name)}'`
+      );
+      consola.trace(error);
+    }
+  };
+
+  return {
+    loadModelFromContent,
+    loadModelFromPath,
+  };
+}
+
+function createConfigVariables(config: Required<InitOptionsOnly>) {
+  return {
+    PCGEN_FOLDER: config.pcgenFolder,
+    GENERATOR_FOLDER: config.generatorFolder,
+    COMMANDS_FOLDER: config.commandsFolder,
+    TEMPLATES_FOLDER: config.templatesFolder,
+    DEFAULT_COMMAND: config.defaultCommand,
+    CWD: config.cwd,
+    INIT_ASSETS: config.initAssets,
+    OUT_DIR: config.outDir,
+  };
+}
+
+function createConfiguration(config: IConfigurationFile): IConfiguration {
+  const requiredConfig: Required<InitOptionsOnly> = {
     ...defaultInitOptions,
     ...config,
   };
 
+  const atCWD = (...paths: string[]): string => {
+    return path.normalize(joinPaths(requiredConfig.cwd, ...paths));
+  };
+
+  const atBasePath = (...paths: string[]): string => {
+    return path.normalize(joinPaths(process.cwd(), ...paths));
+  };
+
+  const atOutDir = (...paths: string[]): string =>
+    atCWD(requiredConfig.outDir, ...paths);
+
+  const variables: Variables = {
+    ...process.env,
+    ...createConfigVariables(requiredConfig),
+  };
+
+  const modelLoaders = createModelLoaders(config, variables);
+
   return {
     ...requiredConfig,
+    variables,
+    atCWD,
+    atBasePath,
+    atOutDir,
+    ...modelLoaders,
   };
 }
 
 const defaultPrintListOptions: Required<PrintOptionsOnly> = {
   showBasePath: false,
   showSummary: false,
+  showCommands: false,
+  showDetails: false,
 };
 
 const defaultListOptions: Required<ListOptions> = {
@@ -200,6 +467,62 @@ function requiredListOptions(options?: ListOptions): Required<ListOptions> {
     ...defaultListOptions,
     ...options,
   };
+}
+
+async function loadGeneratorModelFile(
+  name: string,
+  basePath: string,
+  configuration: IConfiguration
+) {
+  const files = await globFiles(basePath, `${name}.*`);
+
+  if (files.length === 0) {
+    consola.trace(
+      chalk`Generator '${sprintLabel(name)}' at '${sprintLabel(
+        basePath
+      )}' does not have an explicit model '${sprintLabel(name)}.*'`
+    );
+    return undefined;
+  }
+
+  if (files.length > 1) {
+    const found = sprintBadList(files);
+    consola.info(
+      chalk`Generator '${sprintLabel(name)}' at '${sprintLabel(
+        basePath
+      )}' have multiple explicit models: ${found}`
+    );
+    return undefined;
+  }
+
+  const model: IGeneratorModelFile = await configuration.loadModelFromPath(
+    files[0],
+    undefined,
+    true,
+    true
+  );
+
+  // TODO: Validate model
+
+  return model;
+}
+
+async function loadCommand(
+  commandModel: ICommandModel,
+  defaultCommandMode: CommandMode
+): Promise<ICommand | undefined> {
+  const commandMode: CommandMode =
+    commandModel.js ? 'js' :
+    commandModel.folder ? 'folder' :
+    defaultCommandMode
+
+  return {
+    name: commandModel.name,
+    caption: commandModel.caption,
+    summary: commandModel.summary,
+    details: commandModel.details,
+    commandMode,
+  }
 }
 
 async function loadGenerator(
@@ -224,11 +547,64 @@ async function loadGenerator(
    *
    */
 
-  return {
-    name,
-    basePath,
-    configuration,
-  };
+  let modelFile = await loadGeneratorModelFile(name, basePath, configuration);
+  // const isConventionBased = !generatorModelFile
+  // console.log('generatorModelFile', generatorModelFile);
+  if (modelFile === undefined) {
+    // TODO: Implement convention based generator
+    consola.log(
+      chalk`Could not load generator '${sprintBad(name)}' at '${sprintBad(
+        basePath
+      )}'`
+    );
+    return undefined;
+  } else {
+    // TODO: Validate model is fine
+    const defaultCommandMode: CommandMode =
+      modelFile.defaultCommandMode === 'js'
+        ? 'js'
+        : modelFile.defaultCommandMode === 'folder'
+        ? 'folder'
+        : 'js';
+
+    const commands = await Promise.all(
+      modelFile.commands.map((c) => loadCommand(c, defaultCommandMode))
+    );
+
+    if (commands.some((c) => !c)) {
+      const badCommands = sprintBadList(
+        modelFile.commands
+          .map((cm, i) => (!commands[i] ? cm.name : undefined))
+          .filter((n) => !!n)
+      );
+      consola.log(
+        chalk`Could not load some commands of generator '${sprintLabel(
+          name
+        )}' at '${sprintLabel(basePath)}': ${badCommands}`
+      );
+      return undefined;
+    }
+
+    const generator: IGenerator = {
+      name,
+      basePath,
+      configuration,
+      commands: commands as ICommand[],
+
+      defaultCommand: modelFile.defaultCommand ?? modelFile.commands[0].name,
+      defaultCommandMode,
+      caption: modelFile.caption,
+      summary: modelFile.summary,
+      details: modelFile.details,
+      tags: modelFile.tags ?? [],
+      defaultEngine: modelFile.defaultEngine,
+      defaultEngineOptions: modelFile.defaultEngineOptions,
+    };
+
+    // consola.log('generator', generator)
+
+    return generator;
+  }
 }
 
 async function searchGenerators(
@@ -238,16 +614,18 @@ async function searchGenerators(
 ): Promise<IGenerator[]> {
   const generators: IGenerator[] = [];
 
-  for (const searchPath of ['.', ...configuration.searchPaths]) {
-    const pcgenFolder = joinPaths(searchPath, configuration.pcgenFolder);
-    for (const directory of await fsListDirectories(pcgenFolder)) {
+  for (const searchPath of [
+    configuration.pcgenFolder,
+    ...configuration.searchPaths,
+  ]) {
+    for (const directory of await fsListDirectories(searchPath)) {
       if (
         !listOptions.name ||
         directory.toLowerCase().indexOf(listOptions.name.toLowerCase()) >= 0
       ) {
         const generator = await loadGenerator(
           directory,
-          joinPaths(pcgenFolder, directory),
+          joinPaths(searchPath, directory),
           configuration
         );
 
@@ -269,10 +647,41 @@ async function printGenerator(
   generator: IGenerator,
   printOptions: Required<PrintOptionsOnly>
 ) {
-  consola.log(chalk`- {green ${generator.name}}`);
+  if (generator.caption) {
+    consola.log(chalk`- ${sprintGood(generator.name)}: ${sprintLabel(generator.caption)}`);
+  } else {
+    consola.log(chalk`- ${sprintGood(generator.name)}`);
+  }
+
+  if (printOptions.showSummary && generator.summary) {
+    consola.log(`    ${sprintInfo(generator.summary)}`);
+  }
 
   if (printOptions.showBasePath) {
     printField('Base Path', generator.basePath);
+  }
+
+  if (printOptions.showDetails) {
+    printDetails(generator.details, '');
+  }
+
+  if (printOptions.showCommands) {
+    printField('Commands', '');
+    for (const command of generator.commands) {
+      if (command.caption) {
+        consola.log(chalk`    - ${sprintGood(command.name)}: ${sprintLabel(command.caption)}`);
+      } else {
+        consola.log(chalk`    - ${sprintGood(command.name)}`);
+      }
+
+      if (printOptions.showSummary && command.summary) {
+        consola.log(`        ${sprintInfo(command.summary)}`);
+      }
+
+      if (printOptions.showDetails) {
+        printDetails(command.details, '    ');
+      }
+    }
   }
 }
 
@@ -289,12 +698,14 @@ export async function listGenerators(options: ListOptions) {
 
   if (!config) {
     consola.log(
-      chalk`PCGen is not initialized in current folder. Run command {green pcgen init} to start using pcgen`
+      chalk`PCGen is not initialized in current folder. Run command ${sprintGood(
+        'pcgen init'
+      )} to start using pcgen`
     );
     return;
   }
 
-  const configuration = requiredConfig(config);
+  const configuration = createConfiguration(config);
 
   const generators = await searchGenerators(configuration, listOptions);
 
@@ -311,6 +722,8 @@ export async function listGenerators(options: ListOptions) {
 const defaultPrintInfoOptions: Required<PrintOptionsOnly> = {
   showBasePath: true,
   showSummary: true,
+  showCommands: true,
+  showDetails: true,
 };
 
 const defaultInfoOptions: Required<InfoOptions> = {
@@ -339,12 +752,14 @@ export async function showGeneratorInfo(options: InfoOptions) {
 
   if (!config) {
     consola.log(
-      chalk`PCGen is not initialized in current folder. Run command {green pcgen init} to start using pcgen`
+      chalk`PCGen is not initialized in current folder. Run command ${sprintGood(
+        'pcgen init'
+      )} to start using pcgen`
     );
     return;
   }
 
-  const configuration = requiredConfig(config);
+  const configuration = createConfiguration(config);
 
   const generators = await searchGenerators(configuration, infoOptions);
 
@@ -354,7 +769,9 @@ export async function showGeneratorInfo(options: InfoOptions) {
   }
 
   if (generators.length > 1) {
-    consola.log(chalk`There are multiple generators with given criteria'`);
+    consola.log(
+      chalk`{yellow There are multiple generators with given criteria}`
+    );
   }
 
   for (const generator of generators) {

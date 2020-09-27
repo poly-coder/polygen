@@ -1,5 +1,5 @@
 import consola from 'consola';
-import { getOptions } from '../common';
+import { getOptions } from '../options';
 
 describe('getOptions', () => {
   beforeAll(() => {

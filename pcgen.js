@@ -1,7 +1,7 @@
 module.exports = function() {
   return {
-    basePath: '.',
     cwd: '.',
+    outDir: '.',
     generatorFolder: 'generator',
     commandsFolder: 'commands',
     templatesFolder: 'templates',

@@ -39,5 +39,9 @@ export function initCommand(command: commander.Command) {
       '--init-assets',
       'Folder containing initial generator assets to copy to local _pcgen folder'
     )
+    .option(
+      '--out-dir',
+      'Output directory where to put generated files. Try "src", "src/generated", etc. By default is current directory. If relative, it is based on CWD'
+    )
     .action((args) => initialize(getOptions(args)));
 }

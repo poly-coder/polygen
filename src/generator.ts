@@ -4,21 +4,33 @@ import ejs from 'ejs';
 import fs from 'fs-extra';
 import json5 from 'json5';
 import path from 'path';
-import { fsExistsAsFile, fsListDirectories, fsWriteFileContent, joinPaths } from './file-utils';
-import { createLogPrefix } from './logging';
+import {
+  fsExistsAsFile,
+  fsListDirectories,
+  fsWriteFileContent,
+  joinPaths,
+} from './file-utils';
+import { createLogPrefix, printField } from './logging';
 import {
   GlobalOptions,
-  ICompleteConfigurationFile,
+  IConfiguration,
   IConfigurationFile,
+  IGenerator,
   InfoOptions,
   InitOptions,
   ListOptions,
+  PrintOptionsOnly,
+  SearchOptionsOnly,
 } from './types';
 
 const defaultGlobalOptions: Required<GlobalOptions> = {
   configFile: 'pcgen.js',
   logLevel: LogLevel.Info,
   version: '',
+};
+
+const defaultSearchOptions: Required<SearchOptionsOnly> = {
+  name: '',
 };
 
 function applyGlobalOptions(options: GlobalOptions) {
@@ -31,11 +43,11 @@ export async function loadConfigurationFile(
   const logPrefix = createLogPrefix('loadConfigurationFile');
 
   consola.trace(chalk`${logPrefix}: [Start]`);
-  
+
   consola.trace(chalk`${logPrefix}: configFile='${configFile}'`);
-  
-  const fileName = path.normalize(path.resolve(joinPaths('.', configFile)))
-  
+
+  const fileName = path.normalize(path.resolve(joinPaths('.', configFile)));
+
   consola.trace(chalk`${logPrefix}: fileName='${fileName}'`);
 
   try {
@@ -74,6 +86,7 @@ export async function loadConfigurationFile(
 const defaultInitOptions: Required<InitOptions> = {
   ...defaultGlobalOptions,
   cwd: '.',
+  outDir: '.',
   generatorFolder: 'generator',
   commandsFolder: 'commands',
   templatesFolder: 'templates',
@@ -143,6 +156,7 @@ export async function initialize(options: InitOptions) {
       json5: json5,
       config: {
         cwd: initOptions.cwd,
+        outDir: initOptions.outDir,
         generatorFolder: initOptions.generatorFolder,
         commandsFolder: initOptions.commandsFolder,
         templatesFolder: initOptions.templatesFolder,
@@ -159,15 +173,25 @@ export async function initialize(options: InitOptions) {
   }
 }
 
-function requiredConfig(config: IConfigurationFile): ICompleteConfigurationFile {
-  return {
+function requiredConfig(config: IConfigurationFile): IConfiguration {
+  const requiredConfig: Required<IConfigurationFile> = {
     ...defaultInitOptions,
     ...config,
-  }
+  };
+
+  return {
+    ...requiredConfig,
+  };
 }
+
+const defaultPrintListOptions: Required<PrintOptionsOnly> = {
+  showBasePath: false,
+  showSummary: false,
+};
 
 const defaultListOptions: Required<ListOptions> = {
   ...defaultGlobalOptions,
+  ...defaultPrintListOptions,
   name: '',
 };
 
@@ -176,6 +200,80 @@ function requiredListOptions(options?: ListOptions): Required<ListOptions> {
     ...defaultListOptions,
     ...options,
   };
+}
+
+async function loadGenerator(
+  name: string,
+  basePath: string,
+  configuration: IConfiguration
+): Promise<IGenerator | undefined> {
+  /**
+   *
+   * /<generator>
+   *   - <generator>.js/json/yaml model
+   *   / commands
+   *     - new.js
+   *   / templates
+   *     - main.ejs
+   *
+   * --------------
+   *
+   * /<generator>
+   *   / new
+   *     - main.ejs.t // Contains front matter to describe other features
+   *
+   */
+
+  return {
+    name,
+    basePath,
+    configuration,
+  };
+}
+
+async function searchGenerators(
+  configuration: IConfiguration,
+  listOptions: Required<SearchOptionsOnly>,
+  top?: number
+): Promise<IGenerator[]> {
+  const generators: IGenerator[] = [];
+
+  for (const searchPath of ['.', ...configuration.searchPaths]) {
+    const pcgenFolder = joinPaths(searchPath, configuration.pcgenFolder);
+    for (const directory of await fsListDirectories(pcgenFolder)) {
+      if (
+        !listOptions.name ||
+        directory.toLowerCase().indexOf(listOptions.name.toLowerCase()) >= 0
+      ) {
+        const generator = await loadGenerator(
+          directory,
+          joinPaths(pcgenFolder, directory),
+          configuration
+        );
+
+        if (generator) {
+          generators.push(generator);
+
+          if (top !== undefined && generators.length >= top) {
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return generators;
+}
+
+async function printGenerator(
+  generator: IGenerator,
+  printOptions: Required<PrintOptionsOnly>
+) {
+  consola.log(chalk`- {green ${generator.name}}`);
+
+  if (printOptions.showBasePath) {
+    printField('Base Path', generator.basePath);
+  }
 }
 
 export async function listGenerators(options: ListOptions) {
@@ -193,22 +291,32 @@ export async function listGenerators(options: ListOptions) {
     consola.log(
       chalk`PCGen is not initialized in current folder. Run command {green pcgen init} to start using pcgen`
     );
-  } else {
-    const conf = requiredConfig(config)
-    
-    const directories = await fsListDirectories(conf.pcgenFolder)
+    return;
+  }
 
-    directories.forEach(name => {
-      if (!listOptions.name || name.toLowerCase().indexOf(listOptions.name.toLowerCase()) >= 0) {
-        consola.log(chalk`- {green ${name}}`)
-      }
-    });
+  const configuration = requiredConfig(config);
+
+  const generators = await searchGenerators(configuration, listOptions);
+
+  if (generators.length === 0) {
+    consola.log(chalk`There are no generators to show with given criteria.`);
+    return;
+  }
+
+  for (const generator of generators) {
+    await printGenerator(generator, listOptions);
   }
 }
 
+const defaultPrintInfoOptions: Required<PrintOptionsOnly> = {
+  showBasePath: true,
+  showSummary: true,
+};
+
 const defaultInfoOptions: Required<InfoOptions> = {
   ...defaultGlobalOptions,
-  generatorName: '',
+  ...defaultSearchOptions,
+  ...defaultPrintInfoOptions,
 };
 
 function requiredInfoOptions(options?: InfoOptions): Required<InfoOptions> {
@@ -233,12 +341,23 @@ export async function showGeneratorInfo(options: InfoOptions) {
     consola.log(
       chalk`PCGen is not initialized in current folder. Run command {green pcgen init} to start using pcgen`
     );
-  } else {
-    const conf = requiredConfig(config)
+    return;
+  }
 
-    consola.log('conf', conf)
-    consola.log('infoOptions', infoOptions)
+  const configuration = requiredConfig(config);
 
-    // TODO: load generator from folder
+  const generators = await searchGenerators(configuration, infoOptions);
+
+  if (generators.length === 0) {
+    consola.log(chalk`There are no generators to show with given criteria.`);
+    return;
+  }
+
+  if (generators.length > 1) {
+    consola.log(chalk`There are multiple generators with given criteria'`);
+  }
+
+  for (const generator of generators) {
+    await printGenerator(generator, infoOptions);
   }
 }

@@ -1,5 +1,5 @@
 import commander, { Command } from 'commander';
-import { getOptions } from './common';
+import { addPrintOptions, addSearchOptions, getOptions } from './common';
 import { showGeneratorInfo } from './generator';
 
 export function infoCommand(command: commander.Command) {
@@ -7,11 +7,12 @@ export function infoCommand(command: commander.Command) {
     .command('info')
     .alias('i')
     .description('Show detailed information of a generator')
-    .arguments('<generator>')
-    .action((generatorName: string, args: Command) =>
-      showGeneratorInfo({
-        ...getOptions(args),
-        generatorName,
-      })
-    );
-}
+    .action((args: Command) => showGeneratorInfo(getOptions(args)));
+
+  addSearchOptions(command, {});
+
+  addPrintOptions(command, {
+      showBasePath: true,
+      showSummary: true,
+    })
+  }

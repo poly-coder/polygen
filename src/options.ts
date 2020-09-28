@@ -2,13 +2,13 @@ import commander from 'commander';
 import { LogLevel } from 'consola';
 import { parseLogLevel } from './logging';
 import {
-  GlobalOptions,
+  GlobalOptionsOnly,
   OutputOptionsOnly,
   PrintOptionsOnly,
   SearchOptionsOnly,
 } from './types';
 
-export function getOptions<T extends GlobalOptions>(args: any): T {
+export function getOptions<T extends GlobalOptionsOnly>(args: any): T {
   const parentOpts = args.parent ? getOptions(args.parent) : {};
 
   return {

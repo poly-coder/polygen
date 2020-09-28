@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { initCommand } from './command-init';
 import { listCommand } from './command-list';
 import { infoCommand } from './command-info';
-// import { newCommand } from "./command-new";
+import { newCommand } from "./command-new";
 import { addGlobalOptions } from './options';
 
 let mainProgram = new Command();
@@ -23,6 +23,6 @@ mainProgram = mainProgram
 initCommand(mainProgram);
 listCommand(mainProgram);
 infoCommand(mainProgram);
-// newCommand(mainProgram);
+newCommand(mainProgram);
 
 mainProgram.parse(process.argv);

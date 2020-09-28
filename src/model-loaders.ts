@@ -1,6 +1,8 @@
 import consola from "consola";
-import { sprintBad } from "./logging";
-import { IModelLoaderConfig } from "./types";
+import path from 'path';
+import { fsExistsAsFile, fsReadFileContent } from "./file-utils";
+import { createLogPrefix, sprintBad, sprintGood, sprintGoodList } from "./logging";
+import { IConfigurationFile, IModelLoaderConfig, Variables } from "./types";
 
 export const defaultModelLoaders: IModelLoaderConfig[] = [
   {
@@ -58,3 +60,190 @@ export const defaultModelLoaders: IModelLoaderConfig[] = [
     },
   },  
 ]
+
+export function replaceTextVariables(
+  text: string,
+  ...variables: Variables[]
+): string {
+  return text.replace(
+    /%([A-Za-z_][A-Za-z_0-9]*)%/,
+    (substring: string, varName: string): string => {
+      for (const vars of variables) {
+        const result = vars[varName];
+        if (result) {
+          return result;
+        }
+      }
+      return substring;
+    }
+  );
+}
+
+export function createModelLoaders(config: IConfigurationFile, variables: Variables) {
+  const logPrefix = createLogPrefix('createModelLoaders');
+
+  const byName = new Map<string, IModelLoaderConfig>();
+  const byExtension = new Map<string, IModelLoaderConfig>();
+
+  for (const loader of config.modelLoaders ?? []) {
+    const extensions = loader.extensions
+      ? sprintGoodList(loader.extensions)
+      : sprintBad('None');
+    consola.trace(
+      `${logPrefix}: Module loader '${sprintGood(
+        loader.name
+      )}' for extensions: ${extensions}`
+    );
+
+    if (byName.has(loader.name)) {
+      consola.warn(
+        `There are multiple model loaders with name '${sprintBad(loader.name)}'`
+      );
+    } else {
+      byName.set(loader.name, loader);
+    }
+
+    for (const extension of loader.extensions ?? []) {
+      if (byExtension.has(extension)) {
+        consola.warn(
+          `There are multiple model loaders with extension '${sprintBad(
+            extension
+          )}'`
+        );
+      } else {
+        byExtension.set(extension, loader);
+      }
+    }
+  }
+
+  for (const loader of config.useDefaultModelLoaders === false
+    ? []
+    : defaultModelLoaders) {
+    const extensions = loader.extensions
+      ? sprintGoodList(loader.extensions)
+      : sprintBad('None');
+    consola.trace(
+      `${logPrefix}: Default module loader '${sprintGood(
+        loader.name
+      )}' for extensions: ${extensions}`
+    );
+
+    if (!byName.has(loader.name)) {
+      byName.set(loader.name, loader);
+    }
+
+    for (const extension of loader.extensions ?? []) {
+      if (!byExtension.has(extension)) {
+        byExtension.set(extension, loader);
+      }
+    }
+  }
+
+  const loadModelFromContent = async (
+    content: string,
+    loaderName: string,
+    isOptional?: boolean,
+    replaceVariables?: boolean
+  ): Promise<any | undefined> => {
+    const errorLogger = isOptional === true ? consola.trace : consola.log;
+
+    const loader = byName.get(loaderName);
+
+    if (!loader) {
+      errorLogger(
+        `There is no model loader register for name '${sprintBad(loaderName)}'`
+      );
+      return undefined;
+    }
+
+    try {
+      if (loader.fromContent) {
+        const text = await loader.fromContent(content);
+        // Replace variables by default
+        if (replaceVariables !== false) {
+          return replaceTextVariables(text, variables);
+        }
+
+        return text;
+      }
+
+      errorLogger(
+        `Model loader '${sprintBad(
+          loaderName
+        )}' cannot load from content. You need to pass the filePath.`
+      );
+      return undefined;
+    } catch (error) {
+      consola.error(`Error loading model of type '${sprintBad(loaderName)}'`);
+      consola.trace(error);
+    }
+  };
+
+  const loadModelFromPath = async (
+    filePath: string,
+    loaderName?: string,
+    isOptional?: boolean,
+    replaceVariables?: boolean
+  ): Promise<any | undefined> => {
+    const errorLogger = isOptional === true ? consola.trace : consola.log;
+
+    const extension = path.extname(filePath);
+
+    const loader = loaderName
+      ? byName.get(loaderName)
+      : byExtension.get(extension);
+
+    if (!loader) {
+      errorLogger(
+        `There is no model loader register for name '${sprintBad(
+          loaderName
+        )}' or extension '${sprintBad(extension)}'`
+      );
+      return undefined;
+    }
+
+    try {
+      if (!(await fsExistsAsFile(filePath))) {
+        errorLogger(`File '${sprintBad(filePath)}' does not exist`);
+        return undefined;
+      }
+
+      if (loader.fromPath) {
+        return await loader.fromPath(filePath);
+      }
+
+      if (loader.fromContent) {
+        const content = await fsReadFileContent(filePath);
+
+        if (content === undefined) {
+          errorLogger(
+            `Cannot read content of model file '${sprintBad(filePath)}'.`
+          );
+          return undefined;
+        }
+
+        if (replaceVariables === true) {
+          const text = replaceTextVariables(content, variables);
+          return await loader.fromContent(text);
+        }
+
+        return await loader.fromContent(content);
+      }
+
+      errorLogger(
+        `Model loader '${sprintBad(
+          loader.name
+        )}' does not define any load function.`
+      );
+      return undefined;
+    } catch (error) {
+      consola.error(`Error loading model of type '${sprintBad(loader.name)}'`);
+      consola.trace(error);
+    }
+  };
+
+  return {
+    loadModelFromContent,
+    loadModelFromPath,
+  };
+}

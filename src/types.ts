@@ -6,7 +6,9 @@ export type Variables = Readonly<Record<string, string>>;
  *     Options      *
  ********************/
 
-export interface GlobalOptions {
+// Partial Options
+
+export interface GlobalOptionsOnly {
   readonly configFile?: string;
   readonly logLevel: LogLevel;
   readonly version: string;
@@ -19,10 +21,10 @@ export interface SearchOptionsOnly {
 }
 
 export interface PrintOptionsOnly {
-  readonly showBasePath: boolean;
-  readonly showSummary: boolean;
-  readonly showDetails: boolean;
-  readonly showCommands: boolean;
+  readonly showBasePath?: boolean;
+  readonly showSummary?: boolean;
+  readonly showDetails?: boolean;
+  readonly showCommands?: boolean;
 }
 
 export interface OutputOptionsOnly {
@@ -30,7 +32,7 @@ export interface OutputOptionsOnly {
   readonly outDir?: string;
 }
 
-export interface InitOptionsOnly extends OutputOptionsOnly {
+export interface InitOptionsOnly {
   readonly searchPaths?: string[];
   readonly pcgenFolder?: string;
   readonly generatorFolder?: string;
@@ -40,19 +42,11 @@ export interface InitOptionsOnly extends OutputOptionsOnly {
   readonly cwd?: string;
   readonly initAssets?: string;
 }
+export interface ListOptionsOnly {}
 
-export interface InitOptions extends GlobalOptions, InitOptionsOnly {}
+export interface InfoOptionsOnly {}
 
-export interface ListOptionsOnly extends SearchOptionsOnly, PrintOptionsOnly {}
-
-export interface ListOptions extends GlobalOptions, ListOptionsOnly {}
-
-export interface InfoOptionsOnly extends SearchOptionsOnly, PrintOptionsOnly {}
-
-export interface InfoOptions extends GlobalOptions, InfoOptionsOnly {}
-
-export interface RunOptionsOnly extends OutputOptionsOnly {
-  readonly name: string;
+export interface RunOptionsOnly {
   readonly command?: string;
   readonly stepTag?: string[];
   readonly model?: string;
@@ -63,7 +57,106 @@ export interface RunOptionsOnly extends OutputOptionsOnly {
   readonly stdout?: boolean;
 }
 
-export interface RunOptions extends GlobalOptions, RunOptionsOnly {}
+// Required Partial Options
+
+export interface RequiredGlobalOptionsOnly {
+  readonly configFile: string;
+  readonly logLevel: LogLevel;
+  readonly version: string;
+  readonly showOptions: boolean;
+}
+
+export interface RequiredSearchOptionsOnly {
+  readonly name?: string;
+  readonly tag: string[];
+}
+
+export interface RequiredPrintOptionsOnly {
+  readonly showBasePath: boolean;
+  readonly showSummary: boolean;
+  readonly showDetails: boolean;
+  readonly showCommands: boolean;
+}
+
+export interface RequiredOutputOptionsOnly {
+  readonly overwrite?: boolean;
+  readonly outDir: string;
+}
+
+export interface RequiredInitOptionsOnly {
+  readonly searchPaths: string[];
+  readonly pcgenFolder: string;
+  readonly generatorFolder: string;
+  readonly commandsFolder: string;
+  readonly templatesFolder: string;
+  readonly defaultCommand: string;
+  readonly cwd: string;
+  readonly initAssets: string;
+}
+export interface RequiredListOptionsOnly {}
+
+export interface RequiredInfoOptionsOnly {}
+
+export interface RequiredRunOptionsOnly {
+  readonly command: string;
+  readonly stepTag: string[];
+  readonly model?: string;
+  readonly jsonPath?: string;
+  readonly modelFormat?: string;
+  readonly phases: string;
+  readonly dryRun: boolean;
+  readonly stdout: boolean;
+}
+
+// User Options
+
+export interface InitOptions
+  extends InitOptionsOnly,
+    GlobalOptionsOnly,
+    OutputOptionsOnly {}
+
+export interface ListOptions
+  extends ListOptionsOnly,
+    GlobalOptionsOnly,
+    SearchOptionsOnly,
+    PrintOptionsOnly {}
+
+export interface InfoOptions
+  extends InfoOptionsOnly,
+    GlobalOptionsOnly,
+    SearchOptionsOnly,
+    PrintOptionsOnly {}
+
+export interface RunOptions
+  extends RunOptionsOnly,
+    GlobalOptionsOnly,
+    SearchOptionsOnly,
+    OutputOptionsOnly {}
+
+// Required Options
+
+export interface RequiredInitOptions
+  extends RequiredInitOptionsOnly,
+    RequiredGlobalOptionsOnly,
+    RequiredOutputOptionsOnly {}
+
+export interface RequiredListOptions
+  extends RequiredListOptionsOnly,
+    RequiredGlobalOptionsOnly,
+    RequiredSearchOptionsOnly,
+    RequiredPrintOptionsOnly {}
+
+export interface RequiredInfoOptions
+  extends RequiredInfoOptionsOnly,
+    RequiredGlobalOptionsOnly,
+    RequiredSearchOptionsOnly,
+    RequiredPrintOptionsOnly {}
+
+export interface RequiredRunOptions
+  extends RequiredRunOptionsOnly,
+    RequiredGlobalOptionsOnly,
+    RequiredSearchOptionsOnly,
+    RequiredOutputOptionsOnly {}
 
 /******************************
  *     Configuration File     *
@@ -76,12 +169,12 @@ export interface IModelLoaderConfig {
   readonly fromPath?: (path: string) => Promise<any | undefined>;
 }
 
-export interface IConfigurationFile extends InitOptionsOnly {
+export interface IConfigurationFile extends InitOptionsOnly, OutputOptionsOnly {
   readonly useDefaultModelLoaders?: boolean;
   readonly modelLoaders?: IModelLoaderConfig[];
 }
 
-export interface IConfiguration extends Required<InitOptionsOnly> {
+export interface IConfiguration extends RequiredInitOptionsOnly {
   readonly atCWD: (...paths: string[]) => string;
   readonly atBasePath: (...paths: string[]) => string;
   readonly atOutDir: (...paths: string[]) => string;
@@ -94,7 +187,7 @@ export interface IConfiguration extends Required<InitOptionsOnly> {
     isOptional?: boolean,
     replaceVariables?: boolean
   ) => Promise<any | undefined>;
-  
+
   readonly loadModelFromPath: (
     path: string,
     loaderName?: string,

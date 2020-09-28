@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import consola from "consola";
 import { sprintBad } from "./logging";
 import { IModelLoaderConfig } from "./types";
@@ -11,7 +10,7 @@ export const defaultModelLoaders: IModelLoaderConfig[] = [
       const loadedModule = await import(filePath);
 
       if (typeof loadedModule.default !== 'function') {
-        consola.trace(chalk`Module at '${sprintBad(filePath)}' does not exports a default function`)
+        consola.trace(`Module at '${sprintBad(filePath)}' does not exports a default function`)
         return 
       }
 

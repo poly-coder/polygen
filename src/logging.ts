@@ -91,10 +91,10 @@ export function printField(key: string, value: any, indent: string = '') {
       return
   }
   if ((key + value).length > 40) {
-      consola.log(chalk`${indent}    ${sprintLabel(key)}:`)
-      consola.log(chalk`${indent}        ${sprintInfo(value)}`)
+      consola.log(`${indent}    ${sprintLabel(key)}:`)
+      consola.log(`${indent}        ${sprintInfo(value)}`)
   } else {
-      consola.log(chalk`${indent}    ${sprintLabel(key)}: ${sprintInfo(value)}`)
+      consola.log(`${indent}    ${sprintLabel(key)}: ${sprintInfo(value)}`)
   }
 }
 

@@ -10,11 +10,12 @@ export interface GlobalOptions {
   readonly configFile?: string;
   readonly logLevel: LogLevel;
   readonly version: string;
+  readonly showOptions: boolean;
 }
 
 export interface SearchOptionsOnly {
   readonly name?: string;
-  // readonly tags: string[];
+  readonly tag?: string[];
 }
 
 export interface PrintOptionsOnly {
@@ -51,10 +52,9 @@ export interface InfoOptionsOnly extends SearchOptionsOnly, PrintOptionsOnly {}
 export interface InfoOptions extends GlobalOptions, InfoOptionsOnly {}
 
 export interface RunOptionsOnly extends OutputOptionsOnly {
-  readonly name?: string;
-  readonly generator: string;
-  readonly step?: string;
-  readonly tags?: string[];
+  readonly name: string;
+  readonly command?: string;
+  readonly stepTag?: string[];
   readonly model?: string;
   readonly jsonPath?: string;
   readonly modelFormat?: string;

@@ -1,6 +1,6 @@
 {
   "name": "pcgen",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Polyglot Code Generator, pcgen for friends",
   "main": "dist/index.js",
   "repository": {
@@ -25,6 +25,7 @@
     "test:ci": "yarn test:default --ci",
     "test:time_init": "run-s clean:pcgen pcgen-time:init clean:pcgen",
     "watch": "run-s test:watch",
+    "test": "run-s test:code",
     "pcgen": "node dist/bin.js",
     "pcgen-time": "node dist/bin-time.js",
     "pcgen-time:init": "node dist/bin-time.js init"
@@ -85,7 +86,13 @@
     "collectCoverageFrom": [
       "src/*.ts"
     ],
-    "coverageReporters": ["json", "lcov", "text", "clover", "cobertura"],
+    "coverageReporters": [
+      "json",
+      "lcov",
+      "text",
+      "clover",
+      "cobertura"
+    ],
     "coverageThreshold": {
       "global": {
         "branches": 80,

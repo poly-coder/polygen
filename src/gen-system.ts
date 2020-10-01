@@ -32,7 +32,7 @@ import {
   createGeneratorSystemConfig,
   pcgenConfigFileNames,
 } from './gen-configuration';
-import { shorten, tracedError } from './logging';
+import { tracedError } from './logging';
 import {
   findTemplateEngine,
   findTemplateEngineFromExtension,
@@ -416,10 +416,10 @@ export function createGeneratorsSystem(
     engine = context.generatorDescriptor.engine;
 
     if (engine) {
-      return [engine, context.generatorDescriptor.engineOptions];
+      return [engine, localEngineOptions ?? context.generatorDescriptor.engineOptions];
     }
 
-    return [findTemplateEngineFromExtension(fileExtension, console), undefined];
+    return [findTemplateEngineFromExtension(fileExtension, console), localEngineOptions];
   };
 
   const loadModel = async (
@@ -901,10 +901,7 @@ export function createGeneratorsSystem(
 
       if (fileContent) {
         console.trace(
-          `runtime:readFile '${normalizedPath}' from CWD with '${shorten(
-            fileContent,
-            40
-          )}'`
+          `runtime:readFile '${normalizedPath}' from CWD with ${fileContent.length} bytes`
         );
       } else {
         console.trace(`runtime:readFile '${normalizedPath}' NOT FOUND`);

@@ -1,12 +1,14 @@
 import commander, { Command } from 'commander';
+import dotProp from 'dot-prop';
 import { addOutputOptions, addSearchOptions, getOptions } from './options';
-import { runGenerator } from './generator';
+import { runGenerator } from './execute-new';
 
 export function newCommand(command: commander.Command) {
   command = command
     .command('new')
     .alias('n')
-    .description('Execute a generator');
+    .description('Execute a generator')
+    .allowUnknownOption();
 
   command = addSearchOptions(command, {});
 
@@ -21,6 +23,10 @@ export function newCommand(command: commander.Command) {
       '-m, --model <file>',
       'File containing model data. This is a json/yaml/xml/toml/js file containing input model'
     )
+    .option(
+      '-x, --extend-model <file...>',
+      'Module file containing a default function to extend the model. You can apply successive transformations to loaded model.'
+    )
     .option('-f, --model-format <format>', 'Indicates the model format')
     .option(
       '-j, --json-path <path>',
@@ -31,22 +37,44 @@ export function newCommand(command: commander.Command) {
       'Dry run. Do not generate side effects. Only print messages as if code would have been actually generated',
       false
     )
-    .option(
-      '--phases <phase>',
-      'Last phase to run: none, validate, pregenerate, generate, postgenerate or all. Not implemented yet!',
-      'all'
-    )
+    // .option(
+    //   '--phases <phase>',
+    //   'Last phase to run: none, validate, pregenerate, generate, postgenerate or all. Not implemented yet!',
+    //   'all'
+    // )
     .option(
       '--stdout',
       'Print generated content to stdout. Unless option --dry-run is specified, the content is ALSO WRITTEN to files'
     )
     .arguments('<name>')
-    .action((name: string | undefined, args: Command) =>
-      runGenerator({
+    .action(function (name: string | undefined, args: Command) {
+      return runGenerator({
         ...getOptions(args),
         name,
-      })
-    );
+        applyModelArgs: extractModelArgs(args.args),
+      });
+    });
 
   return command;
+}
+
+function extractModelArgs(extraArgs: string[]) {
+  var dotSetMap: any = {};
+
+  for (let index = 0; index < extraArgs.length - 1; index++) {
+    const element = extraArgs[index];
+    if (element.length > '--model-'.length && element.startsWith('--model-')) {
+      const key = element.substring('--model-'.length);
+      const value = extraArgs[index + 1];
+      dotSetMap[key] = value;
+      index++;
+    }
+  }
+
+  return function (model: any) {
+    for (const [key, value] of Object.entries(dotSetMap)) {
+      dotProp.set(model, key, value)
+    }
+    return model;
+  };
 }

@@ -1,8 +1,18 @@
-import consola from "consola";
+import consola from 'consola';
 import path from 'path';
-import { fsExistsAsFile, fsReadFileContent } from "./file-utils";
-import { createLogPrefix, sprintBad, sprintGood, sprintGoodList } from "./logging";
-import { IConfigurationFile, IModelLoaderConfig, Variables } from "./types";
+import { fsExistsAsFile, fsReadFileContent } from './file-utils';
+import {
+  createLogPrefix,
+  sprintBad,
+  sprintGood,
+  sprintGoodList,
+} from './logging';
+import {
+  IConfigurationFile,
+  IModelLoaderConfig,
+  IModelLoaders,
+  Variables,
+} from './types';
 
 export const defaultModelLoaders: IModelLoaderConfig[] = [
   {
@@ -12,8 +22,12 @@ export const defaultModelLoaders: IModelLoaderConfig[] = [
       const loadedModule = await import(filePath);
 
       if (typeof loadedModule.default !== 'function') {
-        consola.trace(`Module at '${sprintBad(filePath)}' does not exports a default function`)
-        return 
+        consola.trace(
+          `Module at '${sprintBad(
+            filePath
+          )}' does not exports a default function`
+        );
+        return;
       }
 
       return await loadedModule.default();
@@ -58,8 +72,8 @@ export const defaultModelLoaders: IModelLoaderConfig[] = [
       const ini = await import('ini');
       return ini.decode(content);
     },
-  },  
-]
+  },
+];
 
 export function replaceTextVariables(
   text: string,
@@ -79,24 +93,30 @@ export function replaceTextVariables(
   );
 }
 
-export function createModelLoaders(config: IConfigurationFile, variables: Variables) {
+export function createModelLoaders(
+  config: IConfigurationFile,
+  variables: Variables
+): IModelLoaders {
   const logPrefix = createLogPrefix('createModelLoaders');
 
   const byName = new Map<string, IModelLoaderConfig>();
   const byExtension = new Map<string, IModelLoaderConfig>();
 
-  for (const loader of config.modelLoaders ?? []) {
+  function addLoader(loader: IModelLoaderConfig, isDefault: boolean) {
     const extensions = loader.extensions
       ? sprintGoodList(loader.extensions)
       : sprintBad('None');
+
     consola.trace(
-      `${logPrefix}: Module loader '${sprintGood(
-        loader.name
-      )}' for extensions: ${extensions}`
+      `${logPrefix}: ${
+        isDefault ? 'Default model' : 'Model'
+      } loader '${sprintGood(loader.name)}' for extensions: ${extensions}`
     );
 
+    const warnLogger = isDefault ? consola.trace : consola.warn;
+
     if (byName.has(loader.name)) {
-      consola.warn(
+      warnLogger(
         `There are multiple model loaders with name '${sprintBad(loader.name)}'`
       );
     } else {
@@ -105,7 +125,7 @@ export function createModelLoaders(config: IConfigurationFile, variables: Variab
 
     for (const extension of loader.extensions ?? []) {
       if (byExtension.has(extension)) {
-        consola.warn(
+        warnLogger(
           `There are multiple model loaders with extension '${sprintBad(
             extension
           )}'`
@@ -116,27 +136,14 @@ export function createModelLoaders(config: IConfigurationFile, variables: Variab
     }
   }
 
+  for (const loader of config.modelLoaders ?? []) {
+    addLoader(loader, false);
+  }
+
   for (const loader of config.useDefaultModelLoaders === false
     ? []
     : defaultModelLoaders) {
-    const extensions = loader.extensions
-      ? sprintGoodList(loader.extensions)
-      : sprintBad('None');
-    consola.trace(
-      `${logPrefix}: Default module loader '${sprintGood(
-        loader.name
-      )}' for extensions: ${extensions}`
-    );
-
-    if (!byName.has(loader.name)) {
-      byName.set(loader.name, loader);
-    }
-
-    for (const extension of loader.extensions ?? []) {
-      if (!byExtension.has(extension)) {
-        byExtension.set(extension, loader);
-      }
-    }
+    addLoader(loader, true);
   }
 
   const loadModelFromContent = async (
@@ -176,6 +183,7 @@ export function createModelLoaders(config: IConfigurationFile, variables: Variab
     } catch (error) {
       consola.error(`Error loading model of type '${sprintBad(loaderName)}'`);
       consola.trace(error);
+      return undefined;
     }
   };
 
@@ -204,7 +212,7 @@ export function createModelLoaders(config: IConfigurationFile, variables: Variab
 
     try {
       if (!(await fsExistsAsFile(filePath))) {
-        errorLogger(`File '${sprintBad(filePath)}' does not exist`);
+        errorLogger(`Model file '${sprintBad(filePath)}' does not exist`);
         return undefined;
       }
 
@@ -239,6 +247,7 @@ export function createModelLoaders(config: IConfigurationFile, variables: Variab
     } catch (error) {
       consola.error(`Error loading model of type '${sprintBad(loader.name)}'`);
       consola.trace(error);
+      return undefined;
     }
   };
 

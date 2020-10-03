@@ -1,6 +1,6 @@
 import commander, { Command } from 'commander';
 import { addPrintOptions, addSearchOptions, getOptions } from './options';
-import { listGenerators } from './generator';
+import { listGenerators } from './execute-list';
 
 export function listCommand(command: commander.Command) {
   command = command.command('list').alias('ls').description('List existing generators');

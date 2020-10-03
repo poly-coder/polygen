@@ -38,21 +38,26 @@ export async function printGenerator(
 
   if (printOptions.showCommands) {
     printField('Commands', '');
-    for (const command of generator.commands) {
-      if (command.caption) {
-        consola.log(
-          `    - ${sprintGood(command.name)}: ${sprintLabel(command.caption)}`
-        );
-      } else {
-        consola.log(`    - ${sprintGood(command.name)}`);
-      }
 
-      if (printOptions.showSummary && command.summary) {
-        consola.log(`        ${sprintInfo(command.summary)}`);
-      }
+    const commands = await generator.getCommands();
 
-      if (printOptions.showDetails) {
-        printDetails(command.details, '    ');
+    if (commands) {
+      for (const command of commands) {
+        if (command.caption) {
+          consola.log(
+            `    - ${sprintGood(command.name)}: ${sprintLabel(command.caption)}`
+          );
+        } else {
+          consola.log(`    - ${sprintGood(command.name)}`);
+        }
+  
+        if (printOptions.showSummary && command.summary) {
+          consola.log(`        ${sprintInfo(command.summary)}`);
+        }
+  
+        if (printOptions.showDetails) {
+          printDetails(command.details, '    ');
+        }
       }
     }
   }

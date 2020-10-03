@@ -1,6 +1,7 @@
 import { LogLevel } from 'consola';
 
 export type Variables = Readonly<Record<string, string>>;
+export type GeneratorHelpers = Readonly<Record<string, any>>;
 
 /********************
  *     Options      *
@@ -49,12 +50,14 @@ export interface InfoOptionsOnly {}
 export interface RunOptionsOnly {
   readonly command?: string;
   readonly stepTag?: string[];
-  readonly model?: string;
+  readonly model?: string | any;
+  readonly extendModel?: string[];
   readonly jsonPath?: string;
   readonly modelFormat?: string;
   readonly phases?: string;
   readonly dryRun: boolean;
   readonly stdout?: boolean;
+  readonly applyModelArgs?: (model: any) => any;
 }
 
 // Required Partial Options
@@ -100,12 +103,14 @@ export interface RequiredInfoOptionsOnly {}
 export interface RequiredRunOptionsOnly {
   readonly command: string;
   readonly stepTag: string[];
-  readonly model?: string;
+  readonly model?: string | any;
+  readonly extendModel?: string[];
   readonly jsonPath?: string;
   readonly modelFormat?: string;
   readonly phases: string;
   readonly dryRun: boolean;
   readonly stdout: boolean;
+  readonly applyModelArgs?: (model: any) => any;
 }
 
 // User Options
@@ -165,35 +170,73 @@ export interface RequiredRunOptions
 export interface IModelLoaderConfig {
   readonly name: string;
   readonly extensions?: string[];
+
   readonly fromContent?: (content: string) => Promise<any | undefined>;
   readonly fromPath?: (path: string) => Promise<any | undefined>;
 }
 
-export interface IConfigurationFile extends InitOptionsOnly, OutputOptionsOnly {
-  readonly useDefaultModelLoaders?: boolean;
-  readonly modelLoaders?: IModelLoaderConfig[];
+export interface IModelLoaders {
+  readonly loadModelFromContent: (
+    content: string,
+    loaderName: string,
+    isOptional?: boolean | undefined,
+    replaceVariables?: boolean | undefined
+  ) => Promise<any | undefined>;
+
+  readonly loadModelFromPath: (
+    filePath: string,
+    loaderName?: string | undefined,
+    isOptional?: boolean | undefined,
+    replaceVariables?: boolean | undefined
+  ) => Promise<any | undefined>;
 }
 
-export interface IConfiguration extends RequiredInitOptionsOnly {
+export interface ITemplateRunnerConfig {
+  readonly name: string;
+  readonly extensions?: string[];
+
+  readonly fromContent?: (
+    content: string,
+    context: any,
+    engineOptions?: any
+  ) => Promise<string | undefined>;
+
+  readonly fromPath?: (
+    path: string,
+    context: any,
+    engineOptions?: any
+  ) => Promise<string | undefined>;
+}
+
+export interface ITemplateRunners {
+  readonly renderTemplateFromContent: (
+    content: string,
+    context: any,
+    loaderName: string,
+    engineOptions?: any
+  ) => Promise<string | undefined>;
+
+  readonly renderTemplateFromPath: (
+    filePath: string,
+    context: any,
+    loaderName?: string,
+    engineOptions?: any
+  ) => Promise<string | undefined>;
+}
+
+export interface IConfigurationFile extends InitOptionsOnly, OutputOptionsOnly {
+  readonly useDefaultModelLoaders?: boolean;
+  readonly useDefaultTemplateRunners?: boolean;
+  readonly modelLoaders?: IModelLoaderConfig[];
+  readonly templateRunners?: ITemplateRunnerConfig[];
+}
+
+export interface IConfiguration extends RequiredInitOptionsOnly, IModelLoaders, ITemplateRunners {
   readonly atCWD: (...paths: string[]) => string;
   readonly atBasePath: (...paths: string[]) => string;
   readonly atOutDir: (...paths: string[]) => string;
 
   readonly variables: Variables;
-
-  readonly loadModelFromContent: (
-    content: string,
-    loaderName: string,
-    isOptional?: boolean,
-    replaceVariables?: boolean
-  ) => Promise<any | undefined>;
-
-  readonly loadModelFromPath: (
-    path: string,
-    loaderName?: string,
-    isOptional?: boolean,
-    replaceVariables?: boolean
-  ) => Promise<any | undefined>;
 }
 
 /***********************************
@@ -216,34 +259,150 @@ export interface IGeneratorModelFile extends OutputOptionsOnly {
 
 export interface ICommandModel {
   name: string;
-  js?: string;
+  module?: string;
   folder?: string;
   caption?: string;
   summary?: string;
   details?: ModelDetails;
 }
 
-export type CommandMode = 'folder' | 'js';
+export type CommandMode = 'folder' | 'module';
 
-export interface IGenerator {
+export interface IOperationBase {
+  readonly variables: Variables;
+  readonly configuration: IConfiguration;
+}
+
+export interface IGenerator extends IOperationBase {
   readonly name: string;
   readonly basePath: string;
-  readonly configuration: IConfiguration;
   readonly defaultCommandMode: CommandMode;
-  readonly defaultCommand: string;
   readonly caption?: string;
   readonly summary?: string;
   readonly details?: ModelDetails;
   readonly tags: string[];
   readonly defaultEngine?: string;
   readonly defaultEngineOptions?: string;
-  readonly commands: readonly ICommand[];
+
+  readonly getCommands: () => Promise<ICommand[] | undefined>;
+  readonly getCommand: (name: string) => Promise<ICommand | undefined>;
+  readonly atGenerator: (...paths: string[]) => string;
+  readonly atTemplates: (...paths: string[]) => string;
+  readonly atCommands: (...paths: string[]) => string;
 }
 
-export interface ICommand {
+export interface ICommand extends IOperationBase {
   readonly name: string;
   readonly commandMode: CommandMode;
   readonly caption?: string;
   readonly summary?: string;
   readonly details?: ModelDetails;
+
+  readonly generator: IGenerator;
+
+  readonly createSteps: (
+    context: IGeneratorContext
+  ) => Promise<ICommandResult | undefined>;
+
+  // readonly atTemplates: (...paths: string[]) => string;
+}
+
+/***********************************
+ *             Runtime             *
+ ***********************************/
+
+export interface ICommandStepBase {
+  readonly tags?: string[];
+  readonly skip?: boolean;
+  readonly overwrite?: boolean;
+}
+
+export interface CopyCommandStep extends ICommandStepBase {
+  readonly type: 'copy';
+  readonly from: string;
+  readonly to: string;
+}
+
+export interface TemplateCommandStepBase extends ICommandStepBase {
+  readonly from: string;
+  readonly engine?: string;
+  readonly engineOptions?: any;
+  readonly model?: any | string;
+  readonly modelFormat?: string;
+  readonly jsonPath?: string;
+}
+
+export interface TemplateCommandStep extends TemplateCommandStepBase {
+  readonly type: 'template';
+  readonly to: string;
+}
+
+export interface SnippetCommandStep extends TemplateCommandStepBase {
+  readonly type: 'template';
+  readonly to: string;
+  readonly start?: string;
+  readonly end?: string;
+  readonly startRegExp?: string;
+  readonly endRegExp?: string;
+}
+
+export interface GeneratorCommandStep extends ICommandStepBase, RunOptions {
+  readonly type: 'generator';
+}
+
+export type CommandStep =
+  | CopyCommandStep
+  | TemplateCommandStep
+  | SnippetCommandStep
+  | GeneratorCommandStep;
+
+export interface ICommandResult {
+  readonly steps: CommandStep[];
+}
+
+export interface ICommandStep extends IOperationBase {
+  readonly definition: CommandStep;
+  readonly command: ICommand;
+}
+
+export interface IGeneratorFileSystem {
+  readonly fileExists: (filePath: string) => Promise<boolean>;
+  readonly readFile: (filePath: string) => Promise<string | undefined>;
+  readonly writeFile: (filePath: string, content: string) => void;
+}
+
+export interface IOperationRuntimeBase {
+  readonly options: RequiredRunOptions;
+  readonly configuration: IConfiguration;
+  readonly fileSystem: IGeneratorFileSystem;
+}
+
+export interface IGeneratorRuntime extends IOperationRuntimeBase {
+  readonly type: 'generator';
+  readonly generator: IGenerator;
+}
+
+export interface ICommandRuntime extends IOperationRuntimeBase {
+  readonly type: 'command';
+  readonly generator: IGenerator;
+  readonly command: ICommand;
+}
+
+export interface IStepRuntime extends IOperationRuntimeBase {
+  readonly type: 'step';
+  readonly generator: IGenerator;
+  readonly command: ICommand;
+  readonly step: ICommandStep;
+}
+
+export type OperationRuntime = IGeneratorRuntime | ICommandRuntime | IStepRuntime;
+
+export interface IGeneratorContext {
+  readonly parent: IGeneratorContext | undefined;
+  readonly self: IGeneratorContext;
+  readonly name: string;
+  readonly model?: any;
+  readonly h: GeneratorHelpers;
+  readonly vars: Variables;
+  readonly runtime: OperationRuntime;
 }

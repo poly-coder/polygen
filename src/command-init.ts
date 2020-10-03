@@ -1,6 +1,6 @@
 import commander from 'commander';
 import { addOutputOptions, getOptions } from './options';
-import { initialize } from './generator';
+import { initialize } from './execute-initialize';
 
 export function initCommand(command: commander.Command) {
   command = command

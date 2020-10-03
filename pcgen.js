@@ -1,4 +1,4 @@
-module.exports = function() {
+module.exports = function () {
   return {
     cwd: '.',
     outDir: '.',
@@ -9,5 +9,5 @@ module.exports = function() {
     initAssets: 'assets',
     pcgenFolder: '_pcgen',
     searchPaths: [],
+  };
 };
-}

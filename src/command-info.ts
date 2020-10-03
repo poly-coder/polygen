@@ -1,6 +1,6 @@
 import commander, { Command } from 'commander';
 import { addPrintOptions, addSearchOptions, getOptions } from './options';
-import { showGeneratorInfo } from './generator';
+import { showGeneratorInfo } from './execute-info';
 
 export function infoCommand(command: commander.Command) {
   command = command

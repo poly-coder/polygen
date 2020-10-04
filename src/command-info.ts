@@ -7,7 +7,7 @@ export function infoCommand(command: commander.Command) {
     .command('info')
     .alias('i')
     .description('Show detailed information of a generator')
-    .arguments('[name]');
+    .arguments('[generator]');
 
   command = addSearchOptions(command, {});
 
@@ -18,10 +18,10 @@ export function infoCommand(command: commander.Command) {
     showDetails: true,
   });
 
-  command = command.action((name: string | undefined, args: Command) =>
+  command = command.action((generator: string | undefined, args: Command) =>
     showGeneratorInfo({
       ...getOptions(args),
-      name,
+      generator,
     })
   );
 

@@ -46,11 +46,15 @@ export function newCommand(command: commander.Command) {
       '--stdout',
       'Print generated content to stdout. Unless option --dry-run is specified, the content is ALSO WRITTEN to files'
     )
-    .arguments('<name>')
-    .action(function (name: string | undefined, args: Command) {
+    .arguments('<generator> [name]')
+    .action(function (generator: string, name: string | undefined, args: Command) {
+      const [generatorName, commandName] = generator.split(':')
+
       return runGenerator({
         ...getOptions(args),
         name,
+        generator: generatorName,
+        command: commandName,
         applyModelArgs: extractModelArgs(args.args),
       });
     });

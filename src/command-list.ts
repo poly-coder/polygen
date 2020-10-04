@@ -15,11 +15,11 @@ export function listCommand(command: commander.Command) {
   });
 
   command = command
-    .arguments('[name]')
-    .action((name: string | undefined, args: Command) =>
+    .arguments('[generator]')
+    .action((generator: string | undefined, args: Command) =>
       listGenerators({
         ...getOptions(args),
-        name,
+        generator,
       })
     );
 

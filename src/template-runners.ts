@@ -163,15 +163,15 @@ export function createTemplateRunners(
   const renderTemplateFromContent = async (
     content: string,
     context: any,
-    loaderName: string,
+    engine: string,
     engineOptions?: any
   ): Promise<string | undefined> => {
-    const runner = byName.get(loaderName);
+    const runner = byName.get(engine);
 
     if (!runner) {
       consola.error(
         `There is no template runner register for name '${sprintBad(
-          loaderName
+          engine
         )}'`
       );
       return undefined;
@@ -186,13 +186,13 @@ export function createTemplateRunners(
 
       consola.error(
         `Template runner '${sprintBad(
-          loaderName
+          engine
         )}' cannot load from content. You need to pass the filePath.`
       );
       return undefined;
     } catch (error) {
       consola.error(
-        `Error running template of type '${sprintBad(loaderName)}'`
+        `Error running template of type '${sprintBad(engine)}'`
       );
       consola.trace(error);
       return undefined;
@@ -202,19 +202,19 @@ export function createTemplateRunners(
   const renderTemplateFromPath = async (
     filePath: string,
     context: any,
-    loaderName?: string,
+    engine?: string,
     engineOptions?: any
   ): Promise<string | undefined> => {
     const extension = path.extname(filePath);
 
-    const runner = loaderName
-      ? byName.get(loaderName)
+    const runner = engine
+      ? byName.get(engine)
       : byExtension.get(extension);
 
     if (!runner) {
       consola.error(
         `There is no template runner register for name '${sprintBad(
-          loaderName
+          engine
         )}' or extension '${sprintBad(extension)}'`
       );
       return undefined;

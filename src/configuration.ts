@@ -14,13 +14,14 @@ import { createTemplateRunners } from './template-runners';
 import {
   CommandMode,
   ICommand,
+  ICommandContext,
   ICommandModel,
   ICommandResult,
   IConfiguration,
   IConfigurationFile,
   IGenerator,
-  IGeneratorContext,
   IGeneratorModelFile,
+  LoadModelOptions,
   RequiredGlobalOptionsOnly,
   RequiredInitOptionsOnly,
   RequiredOutputOptionsOnly,
@@ -120,7 +121,7 @@ export function createConfiguration(
   };
 
   const modelLoaders = createModelLoaders(config, variables);
-  
+
   const templateRunners = createTemplateRunners(config);
 
   return {
@@ -193,17 +194,16 @@ export async function loadCommand(
   generator: IGenerator,
   defaultCommandMode: CommandMode
 ): Promise<ICommand | undefined> {
-  const commandMode: CommandMode = commandModel.module
-    ? 'module'
-    : commandModel.folder
-    ? 'folder'
-    : defaultCommandMode;
+  const commandMode: CommandMode =
+    commandModel.module ? 'module' : 
+    commandModel.folder ? 'folder' : 
+    defaultCommandMode;
 
   const createSteps = (function () {
     switch (commandMode) {
       case 'module':
         return async function (
-          context: IGeneratorContext
+          context: ICommandContext
         ): Promise<ICommandResult | undefined> {
           // TODO: js, ts?
           const moduleFileName = commandModel.module
@@ -230,10 +230,10 @@ export async function loadCommand(
 
       default:
         return async function (
-          _context: IGeneratorContext
+          _context: ICommandContext
         ): Promise<ICommandResult | undefined> {
           consola.warn(
-            `Command mode "${commandMode}" is no yet supported. Use mode "js" for the time being.`
+            `Command mode "${commandMode}" is no yet supported. Use mode "module" for the time being.`
           );
           return undefined;
         };
@@ -243,7 +243,7 @@ export async function loadCommand(
   const variables = {
     ...generator.variables,
     COMMAND_NAME: commandModel.name,
-  }
+  };
 
   const command: ICommand = {
     generator,
@@ -252,6 +252,8 @@ export async function loadCommand(
     caption: commandModel.caption,
     summary: commandModel.summary,
     details: commandModel.details,
+    requireName: commandModel.requireName === true,
+    requireModel: commandModel.requireModel === true,
     commandMode,
 
     createSteps,
@@ -384,10 +386,10 @@ export async function loadGenerator(
       ...configuration.variables,
       GENERATOR_PATH: basePath,
       GENERATOR_NAME: generatorName,
-    }
+    };
 
     const generator: IGenerator = {
-      name: generatorName,
+      generatorName,
       basePath,
       configuration,
       variables,
@@ -411,4 +413,77 @@ export async function loadGenerator(
 
     return generator;
   }
+}
+
+
+// TODO: introduce model-transformations: jsonpath-plus, module, [], to generalize this step
+export async function loadFormattedModel(
+  model: string | any | undefined,
+  modelFormat: string | undefined,
+  configuration: IConfiguration,
+  isOptional?: boolean | undefined,
+  replaceVariables?: boolean | undefined
+): Promise<any | undefined> {
+  if (typeof model === 'string') {
+    return await configuration.loadModelFromPath(
+      model,
+      modelFormat,
+      isOptional,
+      replaceVariables
+    );
+  } else {
+    return model;
+  }
+}
+
+export async function applyModelJsonPath(
+  model: any | undefined,
+  jPath: string | undefined
+) {
+  if (!model || !jPath) {
+    return model;
+  }
+
+  const jsonPath = await import('jsonpath-plus');
+
+  const resultModel = jsonPath.JSONPath({ path: jPath, json: model });
+
+  return resultModel;
+}
+
+export function applyModelExtraArgs(
+  model: any | undefined,
+  applyModelArgs: ((model: any) => any) | undefined
+) {
+  if (!model || !applyModelArgs) {
+    return model;
+  }
+
+  const resultModel = applyModelArgs(model);
+
+  return resultModel;
+}
+
+export async function loadModel(
+  baseModel: any | undefined,
+  options: LoadModelOptions,
+  configuration: IConfiguration,
+  isOptional?: boolean | undefined,
+  replaceVariables?: boolean | undefined
+): Promise<any | undefined> {
+  const modelStage1 = baseModel
+    ? baseModel
+    : await loadFormattedModel(
+        options.model,
+        options.modelFormat,
+        configuration,
+        isOptional,
+        replaceVariables
+      );
+
+  const modelStage2 = applyModelJsonPath(modelStage1, options.jsonPath);
+
+  const modelStage3 = applyModelExtraArgs(modelStage2, options.applyModelArgs);
+
+  return modelStage3;
 }

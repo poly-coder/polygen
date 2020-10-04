@@ -30,7 +30,7 @@ export const defaultOutputOptions: RequiredOutputOptionsOnly = {
 };
 
 export const defaultSearchOptions: RequiredSearchOptionsOnly = {
-  name: undefined,
+  generator: undefined,
   tag: [],
 };
 

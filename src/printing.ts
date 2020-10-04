@@ -15,10 +15,10 @@ export async function printGenerator(
 ) {
   if (generator.caption) {
     consola.log(
-      `- ${sprintGood(generator.name)}: ${sprintLabel(generator.caption)}`
+      `- ${sprintGood(generator.generatorName)}: ${sprintLabel(generator.caption)}`
     );
   } else {
-    consola.log(`- ${sprintGood(generator.name)}`);
+    consola.log(`- ${sprintGood(generator.generatorName)}`);
   }
 
   if (printOptions.showSummary && generator.summary) {

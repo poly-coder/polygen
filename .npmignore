@@ -6,6 +6,6 @@ tsconfig
 *.log
 
 _pcgen/
-.pcgen.json
+.pcgen.config.json
 out/
 output/

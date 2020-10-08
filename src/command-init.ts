@@ -38,7 +38,7 @@ export function initCommand(command: commander.Command) {
 
   command = addOutputOptions(command);
 
-  command.action((args) => initialize(getOptions(args)));
+  command = command.action((args) => initialize(getOptions(args)));
 
   return command
 }

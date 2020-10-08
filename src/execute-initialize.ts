@@ -42,7 +42,7 @@ async function executeInitialize(
 
   // Create pcgen.js config file
 
-  const sourceConfigTemplate = path.join(sourceFolder, 'pcgen.js.ejs');
+  const sourceConfigTemplate = path.join(sourceFolder, 'pcgen.config.js.ejs');
   const targetConfig = path.join(initOptions.configFile);
 
   consola.trace(`${logPrefix}: generate '${sprintGood(targetConfig)}'`);

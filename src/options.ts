@@ -21,7 +21,7 @@ export function addGlobalOptions(command: commander.Command) {
   return command
     .option(
       '--config-file <file.js>',
-      'Configuration file name for pcgen. Defaults to ".pcgen.json"'
+      'Configuration file name for pcgen. Defaults to "pcgen.config.json"'
     )
     .option(
       '--show-options',

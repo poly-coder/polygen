@@ -18,7 +18,7 @@ import {
 } from './types';
 
 export const defaultGlobalOptions: RequiredGlobalOptionsOnly = {
-  configFile: 'pcgen.js',
+  configFile: 'pcgen.config.js',
   logLevel: LogLevel.Info,
   version: '',
   showOptions: false,

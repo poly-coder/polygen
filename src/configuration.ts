@@ -10,6 +10,7 @@ import {
   sprintLabel,
 } from './logging';
 import { createFallbackModelLoader, createModelLoaders } from './model-loaders';
+import { createFallbackModelValidator, createModelValidators } from './model-validators';
 import { createFallbackTemplateHelpers, createTemplateHelpers } from './template-helpers';
 import { createFallbackTemplateRunners, createTemplateRunners } from './template-runners';
 import {
@@ -138,6 +139,8 @@ export function createConfiguration(
 
   const modelLoaders = createModelLoaders(config, variables, createFallbackModelLoader(fileLocator), true);
 
+  const modelValidators = createModelValidators(config, createFallbackModelValidator(fileLocator), true);
+
   const templateRunners = createTemplateRunners(config, createFallbackTemplateRunners(fileLocator), true);
 
   const templateHelpers = createTemplateHelpers(config, createFallbackTemplateHelpers(), true);
@@ -145,6 +148,7 @@ export function createConfiguration(
   return {
     ...requiredConfig,
     ...modelLoaders,
+    ...modelValidators,
     ...templateRunners,
     ...templateHelpers,
     variables,
@@ -272,6 +276,8 @@ export async function loadCommand(
 
   const modelLoaders = createModelLoaders(commandModel, variables, createFallbackModelLoader(fileLocator), false);
 
+  const modelValidators = createModelValidators(commandModel, createFallbackModelValidator(fileLocator), true);
+
   const templateRunners = createTemplateRunners(commandModel, createFallbackTemplateRunners(fileLocator), false);
 
   const templateHelpers = createTemplateHelpers(commandModel, generator, false);
@@ -288,6 +294,7 @@ export async function loadCommand(
     commandMode,
 
     ...modelLoaders,
+    ...modelValidators,
     ...templateRunners,
     ...templateHelpers,
 
@@ -361,6 +368,8 @@ export async function loadGenerator(
   const fileLocator = createFileLocator(configuration.cwd, outDir)
 
   const modelLoaders = createModelLoaders(modelFile, variables, createFallbackModelLoader(fileLocator), false);
+
+  const modelValidators = createModelValidators(modelFile, createFallbackModelValidator(fileLocator), true);
 
   const templateRunners = createTemplateRunners(modelFile, createFallbackTemplateRunners(fileLocator), false);
 
@@ -454,6 +463,7 @@ export async function loadGenerator(
     defaultEngineOptions: modelFile.defaultEngineOptions,
 
     ...modelLoaders,
+    ...modelValidators,
     ...templateRunners,
     ...templateHelpers,
 

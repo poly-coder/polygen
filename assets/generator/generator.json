@@ -11,6 +11,7 @@
   "commands": [
     {
       "name": "new",
+      "requireName": true,
       "caption": "Create a new simple file based generator",
       "details": {
         "version": "1",

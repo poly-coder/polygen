@@ -104,7 +104,7 @@ export function createFallbackModelLoader(
         options.isOptional === true ? consola.trace : consola.log;
 
       errorLogger(
-        `There is no model loader register for name '${sprintBad(
+        `There is no model loader registered for name '${sprintBad(
           options.loaderName
         )}'`
       );
@@ -115,7 +115,7 @@ export function createFallbackModelLoader(
         options?.isOptional === true ? consola.trace : consola.log;
 
       errorLogger(
-        `There is no model loader register for name '${sprintBad(
+        `There is no model loader registered for name '${sprintBad(
           options?.loaderName ?? '(unspecified)'
         )}' or extension '${sprintBad(path.extname(filePath))}'`
       );

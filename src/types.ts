@@ -184,7 +184,10 @@ export interface IModelLoaderConfig {
   readonly name: string;
   readonly extensions?: string[];
 
-  readonly fromContent?: (content: string, context: any) => Promise<any | undefined>;
+  readonly fromContent?: (
+    content: string,
+    context: any
+  ) => Promise<any | undefined>;
   readonly fromPath?: (path: string, context: any) => Promise<any | undefined>;
 }
 
@@ -203,16 +206,65 @@ export interface LoadModelFromPathOptions extends LoadModelFromOptions {
 
 export interface IModelLoaders extends IFileLocator {
   readonly loadModelFromContent: (
-    content: string, 
+    content: string,
     context: any,
     options: LoadModelFromContentOptions
   ) => Promise<any | undefined>;
 
   readonly loadModelFromPath: (
-    filePath: string, 
+    filePath: string,
     context: any,
     options?: LoadModelFromPathOptions
   ) => Promise<any | undefined>;
+}
+
+// Model Validators
+
+export interface IModelValidatorConfig {
+  readonly name: string;
+  readonly extensions?: string[];
+
+  readonly fromContent?: (
+    content: string,
+    model: any,
+    context: any,
+    validatorOptions: any
+  ) => Promise<boolean | undefined>;
+
+  readonly fromPath?: (
+    path: string,
+    model: any,
+    context: any,
+    validatorOptions: any
+  ) => Promise<boolean | undefined>;
+}
+
+export interface ValidateModelFromOptions {
+  readonly context?: boolean;
+  readonly validatorOptions?: any;
+}
+
+export interface ValidateModelFromContentOptions
+  extends ValidateModelFromOptions {
+  readonly validatorName: string;
+}
+
+export interface ValidateModelFromPathOptions extends ValidateModelFromOptions {
+  readonly validatorName?: string;
+}
+
+export interface IModelValidators extends IFileLocator {
+  readonly validateModelFromContent: (
+    content: string,
+    model: any,
+    options: ValidateModelFromContentOptions
+  ) => Promise<boolean | undefined>;
+
+  readonly validateModelFromPath: (
+    filePath: string,
+    model: any,
+    options?: ValidateModelFromContentOptions
+  ) => Promise<boolean | undefined>;
 }
 
 // Template Runners
@@ -276,6 +328,7 @@ export interface IPlugginExtensions {
   readonly loaders?: IModelLoaderConfig[];
   readonly engines?: ITemplateRunnerConfig[];
   readonly helpers?: ITemplateHelpersConfig[];
+  readonly validators?: IModelValidatorConfig[];
 }
 
 /******************************
@@ -314,6 +367,11 @@ export interface ICommandModel extends IPlugginExtensions {
   readonly details?: ModelDetails;
   readonly requireName?: boolean;
   readonly requireModel?: boolean;
+  readonly validation?: {
+    readonly modelSchema?: any;
+    readonly validator?: string;
+    readonly validatorOptions?: any;
+  }
 }
 
 /***********************************
@@ -324,7 +382,8 @@ export interface IConfiguration
   extends RequiredInitOptionsOnly,
     IModelLoaders,
     ITemplateRunners,
-    ITemplateHelpers {
+    ITemplateHelpers,
+    IModelValidators {
   readonly variables: Variables;
 }
 
@@ -339,7 +398,8 @@ export interface IGenerator
   extends IOperationBase,
     IModelLoaders,
     ITemplateRunners,
-    ITemplateHelpers {
+    ITemplateHelpers,
+    IModelValidators {
   readonly generatorName: string;
   readonly basePath: string;
   readonly outDir: string;
@@ -363,7 +423,8 @@ export interface ICommand
     EngineConfigOptions,
     IModelLoaders,
     ITemplateRunners,
-    ITemplateHelpers {
+    ITemplateHelpers,
+    IModelValidators {
   readonly name: string;
   readonly commandMode: CommandMode;
   readonly caption?: string;

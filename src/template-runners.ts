@@ -123,7 +123,7 @@ export function createFallbackTemplateRunners(
     },
     renderTemplateFromPath: async (filePath, _context, options) => {
       consola.error(
-        `There is no template runner register for name '${sprintBad(
+        `There is no template runner registered for name '${sprintBad(
           options?.engine ?? '(unspecified)'
         )}' or extension '${sprintBad(path.extname(filePath))}'`
       );

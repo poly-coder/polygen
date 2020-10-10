@@ -169,7 +169,7 @@ export function createModelLoaders(
     }
   }
 
-  for (const loader of config.modelLoaders ?? []) {
+  for (const loader of config.loaders ?? []) {
     addLoader(loader, false);
   }
 

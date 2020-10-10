@@ -10,6 +10,7 @@ import {
   sprintLabel,
 } from './logging';
 import { createFallbackModelLoader, createModelLoaders } from './model-loaders';
+import { createFallbackTemplateHelpers, createTemplateHelpers } from './template-helpers';
 import { createFallbackTemplateRunners, createTemplateRunners } from './template-runners';
 import {
   CommandMode,
@@ -139,11 +140,14 @@ export function createConfiguration(
 
   const templateRunners = createTemplateRunners(config, createFallbackTemplateRunners(fileLocator), true);
 
+  const templateHelpers = createTemplateHelpers(config, createFallbackTemplateHelpers(), true);
+
   return {
     ...requiredConfig,
-    variables,
     ...modelLoaders,
     ...templateRunners,
+    ...templateHelpers,
+    variables,
   };
 }
 
@@ -270,6 +274,8 @@ export async function loadCommand(
 
   const templateRunners = createTemplateRunners(commandModel, createFallbackTemplateRunners(fileLocator), false);
 
+  const templateHelpers = createTemplateHelpers(commandModel, generator, false);
+
   const command: ICommand = {
     generator,
     variables,
@@ -283,6 +289,7 @@ export async function loadCommand(
 
     ...modelLoaders,
     ...templateRunners,
+    ...templateHelpers,
 
     runCommand,
     configuration: generator.configuration,
@@ -356,6 +363,8 @@ export async function loadGenerator(
   const modelLoaders = createModelLoaders(modelFile, variables, createFallbackModelLoader(fileLocator), false);
 
   const templateRunners = createTemplateRunners(modelFile, createFallbackTemplateRunners(fileLocator), false);
+
+  const templateHelpers = createTemplateHelpers(modelFile, configuration, false);
     
   const atGenerator = (...paths: string[]) => joinPaths(basePath, ...paths);
   const atCommands = (...paths: string[]) =>
@@ -446,6 +455,7 @@ export async function loadGenerator(
 
     ...modelLoaders,
     ...templateRunners,
+    ...templateHelpers,
 
     getCommands,
     getCommand,

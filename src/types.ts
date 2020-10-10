@@ -178,6 +178,8 @@ export interface IFileLocator {
   readonly atOutDir: (...paths: string[]) => string;
 }
 
+// Model Loaders
+
 export interface IModelLoaderConfig {
   readonly name: string;
   readonly extensions?: string[];
@@ -212,6 +214,8 @@ export interface IModelLoaders extends IFileLocator {
     options?: LoadModelFromPathOptions
   ) => Promise<any | undefined>;
 }
+
+// Template Runners
 
 export interface ITemplateRunnerConfig {
   readonly name: string;
@@ -254,9 +258,24 @@ export interface ITemplateRunners extends IFileLocator {
   ) => Promise<string | undefined>;
 }
 
+// Template Helpers
+
+export interface ITemplateHelpersConfig {
+  readonly name: string;
+  readonly create?: () => any | undefined | Promise<any | undefined>;
+  readonly value?: any;
+}
+
+export interface ITemplateHelpers {
+  readonly createHelpers: () => Promise<any>;
+}
+
+// Pluggins
+
 export interface IPlugginExtensions {
-  readonly modelLoaders?: IModelLoaderConfig[];
-  readonly templateRunners?: ITemplateRunnerConfig[];
+  readonly loaders?: IModelLoaderConfig[];
+  readonly engines?: ITemplateRunnerConfig[];
+  readonly helpers?: ITemplateHelpersConfig[];
 }
 
 /******************************
@@ -304,7 +323,8 @@ export interface ICommandModel extends IPlugginExtensions {
 export interface IConfiguration
   extends RequiredInitOptionsOnly,
     IModelLoaders,
-    ITemplateRunners {
+    ITemplateRunners,
+    ITemplateHelpers {
   readonly variables: Variables;
 }
 
@@ -318,7 +338,8 @@ export interface IOperationBase {
 export interface IGenerator
   extends IOperationBase,
     IModelLoaders,
-    ITemplateRunners {
+    ITemplateRunners,
+    ITemplateHelpers {
   readonly generatorName: string;
   readonly basePath: string;
   readonly outDir: string;
@@ -341,7 +362,8 @@ export interface ICommand
   extends IOperationBase,
     EngineConfigOptions,
     IModelLoaders,
-    ITemplateRunners {
+    ITemplateRunners,
+    ITemplateHelpers {
   readonly name: string;
   readonly commandMode: CommandMode;
   readonly caption?: string;

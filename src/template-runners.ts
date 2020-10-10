@@ -177,7 +177,7 @@ export function createTemplateRunners(
     }
   }
 
-  for (const runner of config.templateRunners ?? []) {
+  for (const runner of config.engines ?? []) {
     addRunner(runner, false);
   }
 

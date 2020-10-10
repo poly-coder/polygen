@@ -22,12 +22,14 @@ import {
   sprintWarn,
 } from './logging';
 import { matchTags, searchGenerators } from './searching';
+import { createFallbackTemplateHelpers, createTemplateHelpers } from './template-helpers';
 import {
   CommandStep,
   CopyCommandStep,
   ICommand,
   ICommandContext,
   ICommandStep,
+  IConfiguration,
   IGenerator,
   IGeneratorContext,
   IGeneratorFileSystem,
@@ -38,15 +40,6 @@ import {
   SnippetCommandStep,
   TemplateCommandStep,
 } from './types';
-
-async function createHelpers() {
-  return {
-    case: (await import('change-case')).default,
-    inflection: (await import('inflection')).default,
-    humanize: (await import('humanize-plus')).default,
-    // Add from configuration/generator: lodash, underscore, rambda, ...
-  };
-}
 
 interface InternalFileSystem {
   readonly fileSystem: IGeneratorFileSystem;
@@ -70,9 +63,8 @@ interface FileSystemScope extends IFileSystemOperation {
 
 type FileSystemOperation = FileSystemMessage | FileSystemScope;
 
-function createFileSystem(generator: IGenerator): InternalFileSystem {
+function createFileSystem(configuration: IConfiguration): InternalFileSystem {
   const INDENT = '    ';
-  const configuration = generator.configuration;
 
   const logPrefix = createLogPrefix('fileSystem');
 
@@ -575,10 +567,10 @@ async function executeSnippetStep(
   return 0;
 }
 
-function createCommandContext(
+async function createCommandContext(
   command: ICommand,
   parentContext: IGeneratorContext
-): ICommandContext {
+): Promise<ICommandContext> {
   const commandContext: ICommandContext = {
     ...parentContext,
     type: 'command',
@@ -586,10 +578,7 @@ function createCommandContext(
     command,
     self: undefined as any,
     vars: command.variables,
-    h: {
-      ...parentContext.h,
-      vars: command.variables,
-    },
+    h: await command.createHelpers(),
   };
 
   return Object.assign(commandContext, { self: commandContext });
@@ -646,7 +635,7 @@ async function executeCommand(
 
   consola.trace(`${logPrefix}: [Start] '${command.name}'`);
 
-  const commandContext = createCommandContext(command, parentContext);
+  const commandContext = await createCommandContext(command, parentContext);
 
   const commandResult = await command.runCommand(commandContext);
 
@@ -724,10 +713,7 @@ function createGeneratorContext(
     generator,
     self: undefined as any,
     vars: generator.variables,
-    h: {
-      ...parentContext.h,
-      vars: generator.variables,
-    },
+    h: generator.createHelpers(),
   };
 
   return Object.assign(generatorContext, { self: generatorContext });
@@ -762,42 +748,23 @@ async function executeGenerator(
 
 async function executeRunGenerator(
   runOptions: RequiredRunOptions,
-  generator: IGenerator
+  generator: IGenerator,
+  context: IOperationContext
 ): Promise<number> {
   const logPrefix = createLogPrefix('executeRunGenerator');
 
   consola.trace(`${logPrefix}: [Start] '${generator.generatorName}'`);
 
-  // Create starting context
-  const configuration = generator.configuration;
-
-  const helpers = {
-    ...(await createHelpers()),
-    env: process.env,
-  };
-
-  const fileSystem = createFileSystem(generator);
-
-  const contextWithoutModel: IOperationContext = {
-    configuration,
-    options: runOptions,
-    vars: configuration.variables,
-    name: runOptions.name,
-    h: helpers,
-    fileSystem: fileSystem.fileSystem,
-    console: consola,
-  };
-
   const model = await loadModel(
     undefined,
     runOptions,
     generator,
-    contextWithoutModel,
+    context,
     { isOptional: false, replaceVariables: false }
   );
 
   const rootContext: IOperationContext = {
-    ...contextWithoutModel,
+    ...context,
     model,
   };
 
@@ -807,7 +774,7 @@ async function executeRunGenerator(
     return result;
   }
 
-  return await fileSystem.execute(runOptions.dryRun, runOptions.stdout);
+  return 0;
 }
 
 export async function runGenerator(options: RunOptions) {
@@ -836,6 +803,21 @@ export async function runGenerator(options: RunOptions) {
 
   const configuration = createConfiguration(config);
 
+  const fileSystem = createFileSystem(configuration);
+
+  const helpers = await createTemplateHelpers(config, createFallbackTemplateHelpers(), true);
+
+  const context: IOperationContext = {
+    configuration,
+    options: runOptions,
+    vars: configuration.variables,
+    name: runOptions.name,
+    h: helpers,
+    fileSystem: fileSystem.fileSystem,
+    console: consola,
+  };
+
+
   const generators = await searchGenerators(configuration, runOptions);
 
   if (generators.length === 0) {
@@ -847,5 +829,11 @@ export async function runGenerator(options: RunOptions) {
     consola.log(`{yellow There are multiple generators with given criteria}`);
   }
 
-  await executeRunGenerator(runOptions, generators[0]);
+  const result = await executeRunGenerator(runOptions, generators[0], context);
+
+  if (result !== 0) {
+    return;
+  }
+
+  await fileSystem.execute(runOptions.dryRun, runOptions.stdout);
 }

@@ -635,6 +635,16 @@ async function executeCommand(
 
   consola.trace(`${logPrefix}: [Start] '${command.name}'`);
 
+  if (command.requireName && !parentContext.name) {
+    consola.error(`This command requires you to set a 'name'`);
+    return -1;
+  }
+
+  if (command.requireModel && !parentContext.model) {
+    consola.error(`This command requires you to set a model`);
+    return -1;
+  }
+
   const commandContext = await createCommandContext(command, parentContext);
 
   const commandResult = await command.runCommand(commandContext);

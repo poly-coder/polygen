@@ -646,7 +646,7 @@ async function executeCommand(
 
   const commandContext = createCommandContext(command, parentContext);
 
-  const commandResult = await command.createSteps(commandContext);
+  const commandResult = await command.runCommand(commandContext);
 
   if (!commandResult) {
     consola.error(

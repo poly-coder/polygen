@@ -165,7 +165,7 @@ async function loadGeneratorFromFile(
 
   if (candidateFiles.length > 1) {
     const found = sprintBadList(candidateFiles);
-    consola.info(
+    consola.log(
       `Generator '${sprintLabel(name)}' at '${sprintLabel(
         basePath
       )}' have multiple explicit models: ${found}`
@@ -212,7 +212,7 @@ export async function loadCommand(
     ? 'folder'
     : defaultCommandMode;
 
-  const createSteps = (function () {
+  const runCommand = (function () {
     switch (commandMode) {
       case 'module':
         return async function (
@@ -281,7 +281,7 @@ export async function loadCommand(
     ...modelLoaders,
     ...templateRunners,
 
-    createSteps,
+    runCommand,
     configuration: generator.configuration,
   };
 

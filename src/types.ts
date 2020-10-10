@@ -3,9 +3,9 @@ import { Consola, LogLevel } from 'consola';
 export type Variables = Readonly<Record<string, string>>;
 export type GeneratorHelpers = Readonly<Record<string, any>>;
 
-/********************
- *     Options      *
- ********************/
+/************************
+ *     CLI Options      *
+ ************************/
 
 // Partial Options
 
@@ -167,9 +167,9 @@ export interface RequiredRunOptions
     RequiredSearchOptionsOnly,
     RequiredOutputOptionsOnly {}
 
-/******************************
- *     Configuration File     *
- ******************************/
+/**************************************
+ *     Plugins and Configurations     *
+ **************************************/
 
 export interface IFileLocator {
   readonly outDir: string;
@@ -257,23 +257,16 @@ export interface IPlugginExtensions {
   readonly templateRunners?: ITemplateRunnerConfig[];
 }
 
+/******************************
+ *     Configuration Files     *
+ ******************************/
+
 export interface IConfigurationFile
   extends InitOptionsOnly,
     OutputOptionsOnly,
     IPlugginExtensions {
   readonly loadDefaultPlugins?: boolean;
 }
-
-export interface IConfiguration
-  extends RequiredInitOptionsOnly,
-    IModelLoaders,
-    ITemplateRunners {
-  readonly variables: Variables;
-}
-
-/***********************************
- *     Generators and Commands     *
- ***********************************/
 
 export type ModelDetails = Record<string, string>;
 
@@ -300,6 +293,17 @@ export interface ICommandModel extends IPlugginExtensions {
   readonly details?: ModelDetails;
   readonly requireName?: boolean;
   readonly requireModel?: boolean;
+}
+
+/***********************************
+ *      Configuration Runtime      *
+ ***********************************/
+
+export interface IConfiguration
+  extends RequiredInitOptionsOnly,
+    IModelLoaders,
+    ITemplateRunners {
+  readonly variables: Variables;
 }
 
 export type CommandMode = 'folder' | 'module';
@@ -346,7 +350,7 @@ export interface ICommand
 
   readonly generator: IGenerator;
 
-  readonly createSteps: (
+  readonly runCommand: (
     context: ICommandContext
   ) => Promise<ICommandResult | undefined>;
 
@@ -354,7 +358,7 @@ export interface ICommand
 }
 
 /***********************************
- *             Runtime             *
+ *       Command Execution         *
  ***********************************/
 
 export interface ICommandStepBase {

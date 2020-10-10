@@ -1,24 +1,21 @@
 {
-    "caption": "Creates new generators and commands",
-    "summary": "This generator was installed when you ran 'pcgen init' in current project. It is not required for pcgen to work, but it helps to create new generators in your projects, and serves as a simple example on how to create a generator",
-    "tags": [
-        "generator",
-        "builtin"
-    ],
-    "details": {
-        "author": "Iskander Sierra",
+  "caption": "Creates new generators and commands",
+  "summary": "This generator was installed when you ran 'pcgen init' in current project. It is not required for pcgen to work, but it helps to create new generators in your projects, and serves as a simple example on how to create a generator",
+  "tags": ["generator", "builtin"],
+  "details": {
+    "author": "Iskander Sierra",
+    "version": "1",
+    "description": "Allows creating new generators in your local project"
+  },
+  "outDir": "%PCGEN_FOLDER%",
+  "commands": [
+    {
+      "name": "new",
+      "caption": "Create a new simple file based generator",
+      "details": {
         "version": "1",
-        "description": "Allows creating new generators in your local project"
-    },
-    "outDir" : "%PCGEN_FOLDER%",
-    "commands": [
-        {
-            "name": "new",
-            "caption": "Create a new simple file based generator",
-            "details": {
-                "version": "1",
-                "description": "Default command to generate the entire project"
-            }
-        }
-    ]
+        "description": "Default command to generate the entire project"
+      }
+    }
+  ]
 }

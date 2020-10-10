@@ -150,7 +150,8 @@ export function createConfiguration(
 async function loadGeneratorFromFile(
   name: string,
   basePath: string,
-  configuration: IConfiguration
+  configuration: IConfiguration,
+  context: any
 ) {
   const candidateFiles = await globFiles(basePath, `${name}.*`);
 
@@ -177,6 +178,7 @@ async function loadGeneratorFromFile(
 
   const model: IGeneratorModelFile = await configuration.loadModelFromPath(
     modulePath,
+    context,
     { isOptional: true, replaceVariables: true }
   );
 
@@ -188,9 +190,10 @@ async function loadGeneratorFromFile(
 export async function loadGeneratorModelFile(
   name: string,
   basePath: string,
-  configuration: IConfiguration
+  configuration: IConfiguration,
+  context: any,
 ): Promise<IGeneratorModelFile | undefined> {
-  const fromFile = await loadGeneratorFromFile(name, basePath, configuration);
+  const fromFile = await loadGeneratorFromFile(name, basePath, configuration, context);
 
   if (!!fromFile) {
     return fromFile;
@@ -310,10 +313,21 @@ export async function loadGenerator(
    *
    */
 
+  const variables = {
+    ...configuration.variables,
+    GENERATOR_PATH: basePath,
+    GENERATOR_NAME: generatorName,
+  };
+
+  const modelContext = {
+    vars: variables,
+  };
+
   let modelFile = await loadGeneratorModelFile(
     generatorName,
     basePath,
-    configuration
+    configuration,
+    modelContext,
   );
 
   // TODO: const isConventionBased = !generatorModelFile
@@ -334,12 +348,6 @@ export async function loadGenerator(
       : modelFile.defaultCommandMode === 'folder'
       ? 'folder'
       : 'module';
-
-  const variables = {
-    ...configuration.variables,
-    GENERATOR_PATH: basePath,
-    GENERATOR_NAME: generatorName,
-  };
 
   const outDir = modelFile.outDir ?? configuration.outDir;
 
@@ -456,12 +464,14 @@ export async function loadFormattedModel(
   model: string | any | undefined,
   modelFormat: string | undefined,
   modelLoaders: IModelLoaders,
+  context: any,
   loadFromOptions?: LoadModelFromOptions
 ): Promise<any | undefined> {
   if (typeof model === 'string') {
     const modelPath = path.resolve(modelLoaders.atCWD(model));
     return await modelLoaders.loadModelFromPath(
       modelPath,
+      context,
       { ...loadFromOptions, loaderName: modelFormat }
     );
   } else {
@@ -501,6 +511,7 @@ export async function loadModel(
   baseModel: any | undefined,
   options: LoadModelOptions,
   modelLoaders: IModelLoaders,
+  context: any,
   loadFromOptions?: LoadModelFromOptions
 ): Promise<any | undefined> {
   const modelStage1 = baseModel
@@ -509,6 +520,7 @@ export async function loadModel(
         options.model,
         options.modelFormat,
         modelLoaders,
+        context,
         loadFromOptions
       );
 

@@ -19,7 +19,7 @@ export const defaultModelLoaders: IModelLoaderConfig[] = [
   {
     name: 'module',
     extensions: ['.js'],
-    fromPath: async (filePath: string) => {
+    fromPath: async (filePath: string, context: any) => {
       const loadedModule = await import(filePath);
 
       if (typeof loadedModule.default !== 'function') {
@@ -31,7 +31,7 @@ export const defaultModelLoaders: IModelLoaderConfig[] = [
         return;
       }
 
-      return await loadedModule.default();
+      return await loadedModule.default(context);
     },
   },
   {
@@ -182,7 +182,7 @@ export function createModelLoaders(
   return {
     ...fallbackModelLoaders,
 
-    loadModelFromContent: async (content, options) => {
+    loadModelFromContent: async (content, context, options) => {
       const { loaderName, isOptional, replaceVariables } = options;
 
       const errorLogger = isOptional === true ? consola.trace : consola.log;
@@ -192,13 +192,14 @@ export function createModelLoaders(
       if (!loader) {
         return await fallbackModelLoaders.loadModelFromContent(
           content,
+          context,
           options
         );
       }
 
       try {
         if (loader.fromContent) {
-          const text = await loader.fromContent(content);
+          const text = await loader.fromContent(content, context);
           // Replace variables by default
           if (replaceVariables !== false) {
             return replaceTextVariables(text, variables);
@@ -220,7 +221,7 @@ export function createModelLoaders(
       }
     },
 
-    loadModelFromPath: async (filePath, options) => {
+    loadModelFromPath: async (filePath, context, options) => {
       const { loaderName, isOptional, replaceVariables } = options ?? {};
 
       const errorLogger = isOptional === true ? consola.trace : consola.log;
@@ -232,7 +233,7 @@ export function createModelLoaders(
         : byExtension.get(extension);
 
       if (!loader) {
-        return await fallbackModelLoaders.loadModelFromPath(filePath, options);
+        return await fallbackModelLoaders.loadModelFromPath(filePath, context, options);
       }
 
       try {
@@ -242,7 +243,7 @@ export function createModelLoaders(
         }
 
         if (loader.fromPath) {
-          return await loader.fromPath(filePath);
+          return await loader.fromPath(filePath, context);
         }
 
         if (loader.fromContent) {
@@ -257,10 +258,10 @@ export function createModelLoaders(
 
           if (replaceVariables === true) {
             const text = replaceTextVariables(content, variables);
-            return await loader.fromContent(text);
+            return await loader.fromContent(text, context);
           }
 
-          return await loader.fromContent(content);
+          return await loader.fromContent(content, context);
         }
 
         errorLogger(

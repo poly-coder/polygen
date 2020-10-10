@@ -389,6 +389,7 @@ async function executeTemplateStep(
     parentContext.model,
     stepDefinition,
     parentContext.command,
+    parentContext,
     { isOptional: false, replaceVariables: false }
   );
 
@@ -500,6 +501,7 @@ async function executeSnippetStep(
     parentContext.model,
     stepDefinition,
     parentContext.command,
+    parentContext,
     { isOptional: false, replaceVariables: false }
   );
 
@@ -769,13 +771,6 @@ async function executeRunGenerator(
   // Create starting context
   const configuration = generator.configuration;
 
-  const model = await loadModel(
-    undefined,
-    runOptions,
-    generator,
-    { isOptional: false, replaceVariables: false }
-  );
-
   const helpers = {
     ...(await createHelpers()),
     env: process.env,
@@ -783,15 +778,27 @@ async function executeRunGenerator(
 
   const fileSystem = createFileSystem(generator);
 
-  const rootContext: IOperationContext = {
+  const contextWithoutModel: IOperationContext = {
     configuration,
     options: runOptions,
-    vars: {},
+    vars: configuration.variables,
     name: runOptions.name,
-    model,
     h: helpers,
     fileSystem: fileSystem.fileSystem,
     console: consola,
+  };
+
+  const model = await loadModel(
+    undefined,
+    runOptions,
+    generator,
+    contextWithoutModel,
+    { isOptional: false, replaceVariables: false }
+  );
+
+  const rootContext: IOperationContext = {
+    ...contextWithoutModel,
+    model,
   };
 
   const result = await executeGenerator(generator, rootContext);

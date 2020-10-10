@@ -182,8 +182,8 @@ export interface IModelLoaderConfig {
   readonly name: string;
   readonly extensions?: string[];
 
-  readonly fromContent?: (content: string) => Promise<any | undefined>;
-  readonly fromPath?: (path: string) => Promise<any | undefined>;
+  readonly fromContent?: (content: string, context: any) => Promise<any | undefined>;
+  readonly fromPath?: (path: string, context: any) => Promise<any | undefined>;
 }
 
 export interface LoadModelFromOptions {
@@ -201,12 +201,14 @@ export interface LoadModelFromPathOptions extends LoadModelFromOptions {
 
 export interface IModelLoaders extends IFileLocator {
   readonly loadModelFromContent: (
-    content: string,
+    content: string, 
+    context: any,
     options: LoadModelFromContentOptions
   ) => Promise<any | undefined>;
 
   readonly loadModelFromPath: (
-    filePath: string,
+    filePath: string, 
+    context: any,
     options?: LoadModelFromPathOptions
   ) => Promise<any | undefined>;
 }

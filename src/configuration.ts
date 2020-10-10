@@ -9,8 +9,8 @@ import {
   sprintGoodList,
   sprintLabel,
 } from './logging';
-import { createModelLoaders } from './model-loaders';
-import { createTemplateRunners } from './template-runners';
+import { createFallbackModelLoader, createModelLoaders } from './model-loaders';
+import { createFallbackTemplateRunners, createTemplateRunners } from './template-runners';
 import {
   CommandMode,
   ICommand,
@@ -19,8 +19,11 @@ import {
   ICommandResult,
   IConfiguration,
   IConfigurationFile,
+  IFileLocator,
   IGenerator,
   IGeneratorModelFile,
+  IModelLoaders,
+  LoadModelFromOptions,
   LoadModelOptions,
   RequiredGlobalOptionsOnly,
   RequiredInitOptionsOnly,
@@ -91,8 +94,29 @@ function createConfigVariables(
     DEFAULT_COMMAND: config.defaultCommand,
     CWD: config.cwd,
     INIT_ASSETS: config.initAssets,
-    OUT_DIR: config.outDir,
+    OUT_DIR: config.outDir ?? '.',
   };
+}
+
+function createFileLocator(cwd: string, outDir: string): IFileLocator {
+
+  const atCWD = (...paths: string[]): string => {
+    return path.normalize(joinPaths(cwd, ...paths));
+  };
+
+  const atBasePath = (...paths: string[]): string => {
+    return path.normalize(joinPaths(process.cwd(), ...paths));
+  };
+
+  const atOutDir = (...paths: string[]): string =>
+    atCWD(outDir, ...paths);
+
+  return {
+    outDir,
+    atCWD,
+    atBasePath,
+    atOutDir,
+  }
 }
 
 export function createConfiguration(
@@ -104,32 +128,20 @@ export function createConfiguration(
     ...config,
   };
 
-  const atCWD = (...paths: string[]): string => {
-    return path.normalize(joinPaths(requiredConfig.cwd, ...paths));
-  };
-
-  const atBasePath = (...paths: string[]): string => {
-    return path.normalize(joinPaths(process.cwd(), ...paths));
-  };
-
-  const atOutDir = (...paths: string[]): string =>
-    atCWD(requiredConfig.outDir, ...paths);
-
   const variables: Variables = {
     ...process.env,
     ...createConfigVariables(requiredConfig),
   };
 
-  const modelLoaders = createModelLoaders(config, variables);
+  const fileLocator = createFileLocator(requiredConfig.cwd, requiredConfig.outDir ?? '.')
 
-  const templateRunners = createTemplateRunners(config);
+  const modelLoaders = createModelLoaders(config, variables, createFallbackModelLoader(fileLocator), true);
+
+  const templateRunners = createTemplateRunners(config, createFallbackTemplateRunners(fileLocator), true);
 
   return {
     ...requiredConfig,
     variables,
-    atCWD,
-    atBasePath,
-    atOutDir,
     ...modelLoaders,
     ...templateRunners,
   };
@@ -161,11 +173,11 @@ async function loadGeneratorFromFile(
     return undefined;
   }
 
+  const modulePath = path.resolve(configuration.atCWD(candidateFiles[0]));
+
   const model: IGeneratorModelFile = await configuration.loadModelFromPath(
-    candidateFiles[0],
-    undefined,
-    true,
-    true
+    modulePath,
+    { isOptional: true, replaceVariables: true }
   );
 
   // TODO: Validate model
@@ -194,10 +206,11 @@ export async function loadCommand(
   generator: IGenerator,
   defaultCommandMode: CommandMode
 ): Promise<ICommand | undefined> {
-  const commandMode: CommandMode =
-    commandModel.module ? 'module' : 
-    commandModel.folder ? 'folder' : 
-    defaultCommandMode;
+  const commandMode: CommandMode = commandModel.module
+    ? 'module'
+    : commandModel.folder
+    ? 'folder'
+    : defaultCommandMode;
 
   const createSteps = (function () {
     switch (commandMode) {
@@ -210,7 +223,7 @@ export async function loadCommand(
             ? commandModel.module
             : `${commandModel.name}.js`;
 
-          const modulePath = generator.atCommands(moduleFileName);
+          const modulePath = path.resolve(generator.atCommands(moduleFileName));
 
           const commandModule = await import(modulePath);
 
@@ -245,6 +258,15 @@ export async function loadCommand(
     COMMAND_NAME: commandModel.name,
   };
 
+  // TODO: Add command outDir option
+  const outDir = generator.outDir;
+
+  const fileLocator = createFileLocator(generator.configuration.cwd, outDir)
+
+  const modelLoaders = createModelLoaders(commandModel, variables, createFallbackModelLoader(fileLocator), false);
+
+  const templateRunners = createTemplateRunners(commandModel, createFallbackTemplateRunners(fileLocator), false);
+
   const command: ICommand = {
     generator,
     variables,
@@ -255,6 +277,9 @@ export async function loadCommand(
     requireName: commandModel.requireName === true,
     requireModel: commandModel.requireModel === true,
     commandMode,
+
+    ...modelLoaders,
+    ...templateRunners,
 
     createSteps,
     configuration: generator.configuration,
@@ -300,136 +325,144 @@ export async function loadGenerator(
       )}'`
     );
     return undefined;
-  } else {
-    // TODO: Validate model is fine
-    const defaultCommandMode: CommandMode =
-      modelFile.defaultCommandMode === 'module'
-        ? 'module'
-        : modelFile.defaultCommandMode === 'folder'
-        ? 'folder'
-        : 'module';
-
-    const atGenerator = (...paths: string[]) => joinPaths(basePath, ...paths);
-    const atCommands = (...paths: string[]) =>
-      atGenerator(configuration.commandsFolder, ...paths);
-    const atTemplates = (...paths: string[]) =>
-      atGenerator(configuration.templatesFolder, ...paths);
-
-    const getCommand = async (
-      commandName: string
-    ): Promise<ICommand | undefined> => {
-      const commandModel = modelFile?.commands.find(
-        (c) => c.name === commandName
-      );
-
-      if (!commandModel) {
-        consola.error(
-          `Command '${sprintBad(
-            commandName
-          )}' not found at generator '${sprintBad(generatorName)}'`
-        );
-        return undefined;
-      }
-
-      return await loadCommand(commandModel, generator, defaultCommandMode);
-    };
-
-    let getCommandsPromise: Promise<ICommand[] | undefined>;
-
-    const getCommands = (): Promise<ICommand[] | undefined> => {
-      if (!getCommandsPromise) {
-        getCommandsPromise = (async function () {
-          const commandLoaders = modelFile?.commands?.map((c) =>
-            loadCommand(c, generator, defaultCommandMode)
-          );
-
-          if (!commandLoaders) {
-            consola.error(
-              `Could not retrieve commands from generator '${sprintBad(
-                generatorName
-              )}'`
-            );
-            return undefined;
-          }
-
-          const commands = await Promise.all(commandLoaders);
-
-          if (commands.some((c) => !c)) {
-            const successLoaded = commands.filter((c) => !!c);
-            const errorMessage =
-              successLoaded.length === 0
-                ? `No command could be loaded from generator '${sprintBad(
-                    generatorName
-                  )}'.`
-                : `${
-                    commands.length - successLoaded.length
-                  } commands could not be loaded from generator '${sprintBad(
-                    generatorName
-                  )}'. Only the following were successfuly loaded: ${sprintGoodList(
-                    successLoaded.map((c) => c?.name ?? '')
-                  )}`;
-            consola.error(
-              `Some commands could not be loaded from generator '${sprintBad(
-                generatorName
-              )}'. ${errorMessage}`
-            );
-            return undefined;
-          }
-
-          return commands as ICommand[];
-        })();
-      }
-      return getCommandsPromise;
-    };
-
-    const variables = {
-      ...configuration.variables,
-      GENERATOR_PATH: basePath,
-      GENERATOR_NAME: generatorName,
-    };
-
-    const generator: IGenerator = {
-      generatorName,
-      basePath,
-      configuration,
-      variables,
-
-      defaultCommandMode,
-      caption: modelFile.caption,
-      summary: modelFile.summary,
-      details: modelFile.details,
-      tags: modelFile.tags ?? [],
-      defaultEngine: modelFile.defaultEngine,
-      defaultEngineOptions: modelFile.defaultEngineOptions,
-
-      getCommands,
-      getCommand,
-      atGenerator,
-      atCommands,
-      atTemplates,
-    };
-
-    // consola.log('generator', generator)
-
-    return generator;
   }
-}
 
+  // TODO: Validate model is fine
+  const defaultCommandMode: CommandMode =
+    modelFile.defaultCommandMode === 'module'
+      ? 'module'
+      : modelFile.defaultCommandMode === 'folder'
+      ? 'folder'
+      : 'module';
+
+  const variables = {
+    ...configuration.variables,
+    GENERATOR_PATH: basePath,
+    GENERATOR_NAME: generatorName,
+  };
+
+  const outDir = modelFile.outDir ?? configuration.outDir;
+
+  const fileLocator = createFileLocator(configuration.cwd, outDir)
+
+  const modelLoaders = createModelLoaders(modelFile, variables, createFallbackModelLoader(fileLocator), false);
+
+  const templateRunners = createTemplateRunners(modelFile, createFallbackTemplateRunners(fileLocator), false);
+    
+  const atGenerator = (...paths: string[]) => joinPaths(basePath, ...paths);
+  const atCommands = (...paths: string[]) =>
+    atGenerator(configuration.commandsFolder, ...paths);
+  const atTemplates = (...paths: string[]) =>
+    atGenerator(configuration.templatesFolder, ...paths);
+
+  const getCommand = async (
+    commandName: string
+  ): Promise<ICommand | undefined> => {
+    const commandModel = modelFile?.commands.find(
+      (c) => c.name === commandName
+    );
+
+    if (!commandModel) {
+      consola.error(
+        `Command '${sprintBad(
+          commandName
+        )}' not found at generator '${sprintBad(generatorName)}'`
+      );
+      return undefined;
+    }
+
+    return await loadCommand(commandModel, generator, defaultCommandMode);
+  };
+
+  let getCommandsPromise: Promise<ICommand[] | undefined>;
+
+  const getCommands = (): Promise<ICommand[] | undefined> => {
+    if (!getCommandsPromise) {
+      getCommandsPromise = (async function () {
+        const commandLoaders = modelFile?.commands?.map((c) =>
+          loadCommand(c, generator, defaultCommandMode)
+        );
+
+        if (!commandLoaders) {
+          consola.error(
+            `Could not retrieve commands from generator '${sprintBad(
+              generatorName
+            )}'`
+          );
+          return undefined;
+        }
+
+        const commands = await Promise.all(commandLoaders);
+
+        if (commands.some((c) => !c)) {
+          const successLoaded = commands.filter((c) => !!c);
+          const errorMessage =
+            successLoaded.length === 0
+              ? `No command could be loaded from generator '${sprintBad(
+                  generatorName
+                )}'.`
+              : `${
+                  commands.length - successLoaded.length
+                } commands could not be loaded from generator '${sprintBad(
+                  generatorName
+                )}'. Only the following were successfuly loaded: ${sprintGoodList(
+                  successLoaded.map((c) => c?.name ?? '')
+                )}`;
+          consola.error(
+            `Some commands could not be loaded from generator '${sprintBad(
+              generatorName
+            )}'. ${errorMessage}`
+          );
+          return undefined;
+        }
+
+        return commands as ICommand[];
+      })();
+    }
+    return getCommandsPromise;
+  };
+
+  const generator: IGenerator = {
+    generatorName,
+    basePath,
+    configuration,
+    variables,
+
+    defaultCommandMode,
+    caption: modelFile.caption,
+    summary: modelFile.summary,
+    details: modelFile.details,
+    tags: modelFile.tags ?? [],
+    defaultEngine: modelFile.defaultEngine,
+    defaultEngineOptions: modelFile.defaultEngineOptions,
+
+    ...modelLoaders,
+    ...templateRunners,
+
+    getCommands,
+    getCommand,
+    atGenerator,
+    atCommands,
+    atTemplates,
+  };
+
+  // consola.log('generator', generator)
+
+  return generator;
+}
 
 // TODO: introduce model-transformations: jsonpath-plus, module, [], to generalize this step
 export async function loadFormattedModel(
   model: string | any | undefined,
   modelFormat: string | undefined,
-  configuration: IConfiguration,
-  isOptional?: boolean | undefined,
-  replaceVariables?: boolean | undefined
+  modelLoaders: IModelLoaders,
+  loadFromOptions?: LoadModelFromOptions
 ): Promise<any | undefined> {
   if (typeof model === 'string') {
-    return await configuration.loadModelFromPath(
-      model,
-      modelFormat,
-      isOptional,
-      replaceVariables
+    const modelPath = path.resolve(modelLoaders.atCWD(model));
+    return await modelLoaders.loadModelFromPath(
+      modelPath,
+      { ...loadFromOptions, loaderName: modelFormat }
     );
   } else {
     return model;
@@ -467,18 +500,16 @@ export function applyModelExtraArgs(
 export async function loadModel(
   baseModel: any | undefined,
   options: LoadModelOptions,
-  configuration: IConfiguration,
-  isOptional?: boolean | undefined,
-  replaceVariables?: boolean | undefined
+  modelLoaders: IModelLoaders,
+  loadFromOptions?: LoadModelFromOptions
 ): Promise<any | undefined> {
   const modelStage1 = baseModel
     ? baseModel
     : await loadFormattedModel(
         options.model,
         options.modelFormat,
-        configuration,
-        isOptional,
-        replaceVariables
+        modelLoaders,
+        loadFromOptions
       );
 
   const modelStage2 = applyModelJsonPath(modelStage1, options.jsonPath);

@@ -28,7 +28,6 @@ import {
   ICommand,
   ICommandContext,
   ICommandStep,
-  IConfiguration,
   IGenerator,
   IGeneratorContext,
   IGeneratorFileSystem,
@@ -71,8 +70,9 @@ interface FileSystemScope extends IFileSystemOperation {
 
 type FileSystemOperation = FileSystemMessage | FileSystemScope;
 
-function createFileSystem(configuration: IConfiguration): InternalFileSystem {
+function createFileSystem(generator: IGenerator): InternalFileSystem {
   const INDENT = '    ';
+  const configuration = generator.configuration;
 
   const logPrefix = createLogPrefix('fileSystem');
 
@@ -87,20 +87,29 @@ function createFileSystem(configuration: IConfiguration): InternalFileSystem {
     },
   ];
 
+  const getNormalizedPath = (filePath: string) => 
+    path.normalize(filePath);
+
+  const getFullPath = (normalizedPath: string) => 
+    path.resolve(configuration.atCWD(normalizedPath));
+
+  const getFilePaths = (filePath: string): [string, string] => {
+    const normalizedPath = getNormalizedPath(filePath);
+    return [normalizedPath, getFullPath(normalizedPath)];
+  }
+
   const fileExists = async (filePath: string) => {
-    const normalizedPath = path.normalize(filePath);
+    const [normalizedPath, fullPath] = getFilePaths(filePath);
 
     if (fileMap.has(normalizedPath)) {
       return true;
     }
 
-    const fullPath = configuration.atCWD(normalizedPath);
-
     return await fsExistsAsFile(fullPath);
   };
 
   const readFile = async (filePath: string) => {
-    const normalizedPath = path.normalize(filePath);
+    const [normalizedPath, fullPath] = getFilePaths(filePath);
 
     const content = fileMap.get(normalizedPath);
     if (content !== undefined) {
@@ -110,9 +119,7 @@ function createFileSystem(configuration: IConfiguration): InternalFileSystem {
       return content;
     }
 
-    const fileContent = await fsReadFileContent(
-      configuration.atCWD(normalizedPath)
-    );
+    const fileContent = await fsReadFileContent(fullPath);
 
     if (fileContent) {
       consola.trace(
@@ -126,7 +133,7 @@ function createFileSystem(configuration: IConfiguration): InternalFileSystem {
   };
 
   const writeFile = (message: string, filePath: string, content: string) => {
-    const normalizedPath = path.normalize(filePath);
+    const normalizedPath = getNormalizedPath(filePath);
 
     consola.trace(
       `${logPrefix}:writeFile '${normalizedPath}' with ${content.length} bytes`
@@ -181,8 +188,8 @@ function createFileSystem(configuration: IConfiguration): InternalFileSystem {
     }
 
     for (const [normalizedPath, content] of fileMap.entries()) {
-      const fullPath = configuration.atCWD(normalizedPath);
-      const alreadyExists = fsExistsAsFile(fullPath);
+      const fullPath = getFullPath(normalizedPath);
+      const alreadyExists = await fsExistsAsFile(fullPath);
 
       if (alreadyExists) {
         consola.trace(
@@ -239,13 +246,15 @@ function createFileSystem(configuration: IConfiguration): InternalFileSystem {
   const execute = async (dryRun: boolean, stdout: boolean) => {
     if (scopes.length > 1) {
       consola.trace(
-        `${logPrefix}:execute Some scope were kept open: '${scopes[0].message}'`
+        `${logPrefix}:execute Some scopes were kept open: '${scopes[0].message}'`
       );
     }
 
+    const scope = scopes[scopes.length - 1];
+
     await writeFileContents(dryRun, stdout);
 
-    printScope(scopes[scopes.length - 1]);
+    printScope(scope);
 
     return 0;
   };
@@ -295,6 +304,12 @@ async function executeCopyStep(
   stepDefinition: CopyCommandStep,
   parentContext: ICommandContext
 ): Promise<number> {
+  const logPrefix = createLogPrefix('executeCopyStep');
+
+  consola.trace(
+    `${logPrefix}: [Start] '${stepDefinition.from}' to '${stepDefinition.to}'`
+  );
+
   const stepContext = createStepContext(stepDefinition, parentContext);
 
   const sourcePath = stepContext.generator.atTemplates(stepDefinition.from);
@@ -310,11 +325,11 @@ async function executeCopyStep(
     return -1;
   }
 
+  const targetPath = stepContext.command.atOutDir(stepDefinition.to);
+
   stepContext.fileSystem.writeFile(
-    chalk`{green ${'Copy'}} from '{white ${sourcePath}}' to '{white ${
-      stepDefinition.to
-    }}'.`,
-    stepDefinition.to,
+    chalk`{green ${'Copy'}} from '{white ${sourcePath}}' to '{white ${targetPath}}'.`,
+    targetPath,
     content
   );
 
@@ -364,12 +379,17 @@ async function executeTemplateStep(
   stepDefinition: TemplateCommandStep,
   parentContext: ICommandContext
 ): Promise<number> {
+  const logPrefix = createLogPrefix('executeTemplateStep');
+
+  consola.trace(
+    `${logPrefix}: [Start] '${stepDefinition.from}' to '${stepDefinition.to}'`
+  );
+
   const model = await loadModel(
     parentContext.model,
     stepDefinition,
-    parentContext.configuration,
-    false,
-    false
+    parentContext.command,
+    { isOptional: false, replaceVariables: false }
   );
 
   const stepContext = createStepContext(stepDefinition, parentContext, model);
@@ -381,8 +401,7 @@ async function executeTemplateStep(
   const content = await stepContext.configuration.renderTemplateFromPath(
     templatePath,
     stepContext,
-    engine,
-    engineOptions
+    { engine, engineOptions }
   );
 
   if (content === undefined) {
@@ -394,11 +413,11 @@ async function executeTemplateStep(
     return -1;
   }
 
+  const targetPath = stepContext.command.atOutDir(stepDefinition.to);
+
   stepContext.fileSystem.writeFile(
-    chalk`{green ${'Generated'}} '{white ${
-      stepDefinition.to
-    }}' from template '{white ${templatePath}}'.`,
-    stepDefinition.to,
+    chalk`{green ${'Generated'}} '{white ${targetPath}}' from template '{white ${templatePath}}'.`,
+    targetPath,
     content
   );
 
@@ -471,17 +490,22 @@ async function executeSnippetStep(
   stepDefinition: SnippetCommandStep,
   parentContext: ICommandContext
 ): Promise<number> {
+  const logPrefix = createLogPrefix('executeSnippetStep');
+
+  consola.trace(
+    `${logPrefix}: [Start] '${stepDefinition.from}' to '${stepDefinition.to}'`
+  );
+
   const model = await loadModel(
     parentContext.model,
     stepDefinition,
-    parentContext.configuration,
-    false,
-    false
+    parentContext.command,
+    { isOptional: false, replaceVariables: false }
   );
 
   const stepContext = createStepContext(stepDefinition, parentContext, model);
 
-  const targetPath = stepContext.configuration.atOutDir(stepDefinition.to);
+  const targetPath = stepContext.command.atOutDir(stepDefinition.to);
 
   const targetContent = await stepContext.fileSystem.readFile(targetPath);
 
@@ -524,8 +548,7 @@ async function executeSnippetStep(
   const snippetContent = await stepContext.configuration.renderTemplateFromPath(
     templatePath,
     stepContext,
-    engine,
-    engineOptions
+    { engine, engineOptions }
   );
 
   if (snippetContent === undefined) {
@@ -542,10 +565,8 @@ async function executeSnippetStep(
   const content = startContent + snippetContent + endContent;
 
   stepContext.fileSystem.writeFile(
-    chalk`{green ${'Patched'}} '{white ${
-      stepDefinition.to
-    }}' from snippet '{white ${templatePath}}'.`,
-    stepDefinition.to,
+    chalk`{green ${'Patched'}} '{white ${targetPath}}' from snippet '{white ${templatePath}}'.`,
+    targetPath,
     content
   );
 
@@ -619,6 +640,10 @@ async function executeCommand(
   command: ICommand,
   parentContext: IGeneratorContext
 ): Promise<number> {
+  const logPrefix = createLogPrefix('executeCommand');
+
+  consola.trace(`${logPrefix}: [Start] '${command.name}'`);
+
   const commandContext = createCommandContext(command, parentContext);
 
   const commandResult = await command.createSteps(commandContext);
@@ -633,7 +658,7 @@ async function executeCommand(
   }
 
   for (const stepDefinition of commandResult.steps) {
-    if (!(await shouldSkipStep(stepDefinition, commandContext))) {
+    if (await shouldSkipStep(stepDefinition, commandContext)) {
       continue;
     }
 
@@ -647,7 +672,7 @@ async function executeCommand(
         }
         break;
 
-      case 'template':
+      case 'file':
         {
           const result = await executeTemplateStep(
             stepDefinition,
@@ -710,6 +735,10 @@ async function executeGenerator(
   generator: IGenerator,
   parentContext: IOperationContext
 ): Promise<number> {
+  const logPrefix = createLogPrefix('executeGenerator');
+
+  consola.trace(`${logPrefix}: [Start] '${generator.generatorName}'`);
+
   const generatorContext = createGeneratorContext(generator, parentContext);
 
   const commandName =
@@ -733,15 +762,18 @@ async function executeRunGenerator(
   runOptions: RequiredRunOptions,
   generator: IGenerator
 ): Promise<number> {
+  const logPrefix = createLogPrefix('executeRunGenerator');
+
+  consola.trace(`${logPrefix}: [Start] '${generator.generatorName}'`);
+
   // Create starting context
   const configuration = generator.configuration;
 
   const model = await loadModel(
     undefined,
     runOptions,
-    generator.configuration,
-    false,
-    false
+    generator,
+    { isOptional: false, replaceVariables: false }
   );
 
   const helpers = {
@@ -749,7 +781,7 @@ async function executeRunGenerator(
     env: process.env,
   };
 
-  const fileSystem = createFileSystem(generator.configuration);
+  const fileSystem = createFileSystem(generator);
 
   const rootContext: IOperationContext = {
     configuration,
@@ -759,6 +791,7 @@ async function executeRunGenerator(
     model,
     h: helpers,
     fileSystem: fileSystem.fileSystem,
+    console: consola,
   };
 
   const result = await executeGenerator(generator, rootContext);

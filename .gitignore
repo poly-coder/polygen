@@ -116,6 +116,6 @@ dist
 .pnp.*
 
 _pcgen/
-pcgen.config.json
+pcgen.config.js
 out/
 output/

@@ -8,7 +8,8 @@ import {
   sprintGoodList,
 } from './logging';
 import {
-  IConfigurationFile,
+  IFileLocator,
+  IPlugginExtensions,
   ITemplateRunnerConfig,
   ITemplateRunners,
 } from './types';
@@ -107,8 +108,34 @@ export const defaultTemplateRunners: ITemplateRunnerConfig[] = [
   },
 ];
 
+export function createFallbackTemplateRunners(
+  fileLocator: IFileLocator
+): ITemplateRunners {
+  return {
+    ...fileLocator,
+    renderTemplateFromContent: async (_content, _context, options) => {
+      consola.error(
+        `There is no template runner registered for name '${sprintBad(
+          options.engine
+        )}'`
+      );
+      return undefined;
+    },
+    renderTemplateFromPath: async (filePath, _context, options) => {
+      consola.error(
+        `There is no template runner register for name '${sprintBad(
+          options?.engine ?? '(unspecified)'
+        )}' or extension '${sprintBad(path.extname(filePath))}'`
+      );
+      return undefined;
+    },
+  };
+}
+
 export function createTemplateRunners(
-  config: IConfigurationFile
+  config: IPlugginExtensions,
+  fallbackTemplateRunners: ITemplateRunners,
+  loadDefaultPlugins: boolean
 ): ITemplateRunners {
   const logPrefix = createLogPrefix('createTemplateRunners');
 
@@ -154,110 +181,105 @@ export function createTemplateRunners(
     addRunner(runner, false);
   }
 
-  for (const runner of config.useDefaultTemplateRunners === false
+  for (const runner of loadDefaultPlugins === false
     ? []
     : defaultTemplateRunners) {
     addRunner(runner, true);
   }
 
-  const renderTemplateFromContent = async (
-    content: string,
-    context: any,
-    engine: string,
-    engineOptions?: any
-  ): Promise<string | undefined> => {
-    const runner = byName.get(engine);
+  return {
+    ...fallbackTemplateRunners,
 
-    if (!runner) {
-      consola.error(
-        `There is no template runner register for name '${sprintBad(
-          engine
-        )}'`
-      );
-      return undefined;
-    }
+    renderTemplateFromContent: async (content, context, options) => {
+      const { engine, engineOptions } = options;
 
-    try {
-      if (runner.fromContent) {
-        const text = await runner.fromContent(content, context, engineOptions);
+      const runner = byName.get(engine);
 
-        return text;
+      if (!runner) {
+        return await fallbackTemplateRunners.renderTemplateFromContent(
+          content,
+          context,
+          options
+        );
       }
 
-      consola.error(
-        `Template runner '${sprintBad(
-          engine
-        )}' cannot load from content. You need to pass the filePath.`
-      );
-      return undefined;
-    } catch (error) {
-      consola.error(
-        `Error running template of type '${sprintBad(engine)}'`
-      );
-      consola.trace(error);
-      return undefined;
-    }
-  };
+      try {
+        if (runner.fromContent) {
+          const text = await runner.fromContent(
+            content,
+            context,
+            engineOptions
+          );
 
-  const renderTemplateFromPath = async (
-    filePath: string,
-    context: any,
-    engine?: string,
-    engineOptions?: any
-  ): Promise<string | undefined> => {
-    const extension = path.extname(filePath);
+          return text;
+        }
 
-    const runner = engine
-      ? byName.get(engine)
-      : byExtension.get(extension);
-
-    if (!runner) {
-      consola.error(
-        `There is no template runner register for name '${sprintBad(
-          engine
-        )}' or extension '${sprintBad(extension)}'`
-      );
-      return undefined;
-    }
-
-    try {
-      if (!(await fsExistsAsFile(filePath))) {
-        consola.error(`Template file '${sprintBad(filePath)}' does not exist`);
+        consola.error(
+          `Template runner '${sprintBad(
+            engine
+          )}' cannot load from content. You need to pass the filePath.`
+        );
+        return undefined;
+      } catch (error) {
+        consola.error(`Error running template of type '${sprintBad(engine)}'`);
+        consola.trace(error);
         return undefined;
       }
+    },
 
-      if (runner.fromPath) {
-        return await runner.fromPath(filePath, context, engineOptions);
+    renderTemplateFromPath: async (filePath, context, options) => {
+      const { engine, engineOptions } = options ?? {};
+
+      const extension = path.extname(filePath);
+
+      const runner = engine ? byName.get(engine) : byExtension.get(extension);
+
+      if (!runner) {
+        return await fallbackTemplateRunners.renderTemplateFromPath(
+          filePath,
+          context,
+          options
+        );
       }
 
-      if (runner.fromContent) {
-        const content = await fsReadFileContent(filePath);
-
-        if (content === undefined) {
+      try {
+        if (!(await fsExistsAsFile(filePath))) {
           consola.error(
-            `Cannot read content of template file '${sprintBad(filePath)}'.`
+            `Template file '${sprintBad(filePath)}' does not exist`
           );
           return undefined;
         }
 
-        return await runner.fromContent(content, context, engineOptions);
+        if (runner.fromPath) {
+          return await runner.fromPath(filePath, context, engineOptions);
+        }
+
+        if (runner.fromContent) {
+          const content = await fsReadFileContent(filePath);
+
+          if (content === undefined) {
+            consola.error(
+              `Cannot read content of template file '${sprintBad(filePath)}'.`
+            );
+            return undefined;
+          }
+
+          return await runner.fromContent(content, context, engineOptions);
+        }
+
+        consola.error(
+          `Template runner '${sprintBad(
+            runner.name
+          )}' does not define any load function.`
+        );
+        return undefined;
+      } catch (error) {
+        consola.error(
+          `Error template runner of type '${sprintBad(runner.name)}'`
+        );
+        consola.trace(error);
+        return undefined;
       }
-
-      consola.error(
-        `Template runner '${sprintBad(
-          runner.name
-        )}' does not define any load function.`
-      );
-      return undefined;
-    } catch (error) {
-      consola.error(`Error loading model of type '${sprintBad(runner.name)}'`);
-      consola.trace(error);
-      return undefined;
-    }
-  };
-
-  return {
-    renderTemplateFromContent,
-    renderTemplateFromPath,
+    },
   };
 }

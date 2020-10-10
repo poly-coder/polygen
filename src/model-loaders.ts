@@ -8,9 +8,10 @@ import {
   sprintGoodList,
 } from './logging';
 import {
-  IConfigurationFile,
+  IFileLocator,
   IModelLoaderConfig,
   IModelLoaders,
+  IPlugginExtensions,
   Variables,
 } from './types';
 
@@ -93,9 +94,41 @@ export function replaceTextVariables(
   );
 }
 
+export function createFallbackModelLoader(
+  fileLocator: IFileLocator
+): IModelLoaders {
+  return {
+    ...fileLocator,
+    loadModelFromContent: async (_content, options) => {
+      const errorLogger =
+        options.isOptional === true ? consola.trace : consola.log;
+
+      errorLogger(
+        `There is no model loader register for name '${sprintBad(
+          options.loaderName
+        )}'`
+      );
+      return undefined;
+    },
+    loadModelFromPath: async (filePath, options) => {
+      const errorLogger =
+        options?.isOptional === true ? consola.trace : consola.log;
+
+      errorLogger(
+        `There is no model loader register for name '${sprintBad(
+          options?.loaderName ?? '(unspecified)'
+        )}' or extension '${sprintBad(path.extname(filePath))}'`
+      );
+      return undefined;
+    },
+  };
+}
+
 export function createModelLoaders(
-  config: IConfigurationFile,
-  variables: Variables
+  config: IPlugginExtensions,
+  variables: Variables,
+  fallbackModelLoaders: IModelLoaders,
+  loadDefaultPlugins: boolean
 ): IModelLoaders {
   const logPrefix = createLogPrefix('createModelLoaders');
 
@@ -140,119 +173,109 @@ export function createModelLoaders(
     addLoader(loader, false);
   }
 
-  for (const loader of config.useDefaultModelLoaders === false
+  for (const loader of loadDefaultPlugins === false
     ? []
     : defaultModelLoaders) {
     addLoader(loader, true);
   }
 
-  const loadModelFromContent = async (
-    content: string,
-    loaderName: string,
-    isOptional?: boolean,
-    replaceVariables?: boolean
-  ): Promise<any | undefined> => {
-    const errorLogger = isOptional === true ? consola.trace : consola.log;
+  return {
+    ...fallbackModelLoaders,
 
-    const loader = byName.get(loaderName);
+    loadModelFromContent: async (content, options) => {
+      const { loaderName, isOptional, replaceVariables } = options;
 
-    if (!loader) {
-      errorLogger(
-        `There is no model loader register for name '${sprintBad(loaderName)}'`
-      );
-      return undefined;
-    }
+      const errorLogger = isOptional === true ? consola.trace : consola.log;
 
-    try {
-      if (loader.fromContent) {
-        const text = await loader.fromContent(content);
-        // Replace variables by default
-        if (replaceVariables !== false) {
-          return replaceTextVariables(text, variables);
+      const loader = byName.get(loaderName);
+
+      if (!loader) {
+        return await fallbackModelLoaders.loadModelFromContent(
+          content,
+          options
+        );
+      }
+
+      try {
+        if (loader.fromContent) {
+          const text = await loader.fromContent(content);
+          // Replace variables by default
+          if (replaceVariables !== false) {
+            return replaceTextVariables(text, variables);
+          }
+
+          return text;
         }
 
-        return text;
-      }
-
-      errorLogger(
-        `Model loader '${sprintBad(
-          loaderName
-        )}' cannot load from content. You need to pass the filePath.`
-      );
-      return undefined;
-    } catch (error) {
-      consola.error(`Error loading model of type '${sprintBad(loaderName)}'`);
-      consola.trace(error);
-      return undefined;
-    }
-  };
-
-  const loadModelFromPath = async (
-    filePath: string,
-    loaderName?: string,
-    isOptional?: boolean,
-    replaceVariables?: boolean
-  ): Promise<any | undefined> => {
-    const errorLogger = isOptional === true ? consola.trace : consola.log;
-
-    const extension = path.extname(filePath);
-
-    const loader = loaderName
-      ? byName.get(loaderName)
-      : byExtension.get(extension);
-
-    if (!loader) {
-      errorLogger(
-        `There is no model loader register for name '${sprintBad(
-          loaderName
-        )}' or extension '${sprintBad(extension)}'`
-      );
-      return undefined;
-    }
-
-    try {
-      if (!(await fsExistsAsFile(filePath))) {
-        errorLogger(`Model file '${sprintBad(filePath)}' does not exist`);
+        errorLogger(
+          `Model loader '${sprintBad(
+            loaderName
+          )}' cannot load from content. You need to pass the filePath.`
+        );
+        return undefined;
+      } catch (error) {
+        consola.error(`Error loading model of type '${sprintBad(loaderName)}'`);
+        consola.trace(error);
         return undefined;
       }
+    },
 
-      if (loader.fromPath) {
-        return await loader.fromPath(filePath);
+    loadModelFromPath: async (filePath, options) => {
+      const { loaderName, isOptional, replaceVariables } = options ?? {};
+
+      const errorLogger = isOptional === true ? consola.trace : consola.log;
+
+      const extension = path.extname(filePath);
+
+      const loader = loaderName
+        ? byName.get(loaderName)
+        : byExtension.get(extension);
+
+      if (!loader) {
+        return await fallbackModelLoaders.loadModelFromPath(filePath, options);
       }
 
-      if (loader.fromContent) {
-        const content = await fsReadFileContent(filePath);
-
-        if (content === undefined) {
-          errorLogger(
-            `Cannot read content of model file '${sprintBad(filePath)}'.`
-          );
+      try {
+        if (!(await fsExistsAsFile(filePath))) {
+          errorLogger(`Model file '${sprintBad(filePath)}' does not exist`);
           return undefined;
         }
 
-        if (replaceVariables === true) {
-          const text = replaceTextVariables(content, variables);
-          return await loader.fromContent(text);
+        if (loader.fromPath) {
+          return await loader.fromPath(filePath);
         }
 
-        return await loader.fromContent(content);
+        if (loader.fromContent) {
+          const content = await fsReadFileContent(filePath);
+
+          if (content === undefined) {
+            errorLogger(
+              `Cannot read content of model file '${sprintBad(filePath)}'.`
+            );
+            return undefined;
+          }
+
+          if (replaceVariables === true) {
+            const text = replaceTextVariables(content, variables);
+            return await loader.fromContent(text);
+          }
+
+          return await loader.fromContent(content);
+        }
+
+        errorLogger(
+          `Model loader '${sprintBad(
+            loader.name
+          )}' does not define any load function.`
+        );
+        return undefined;
+      } catch (error) {
+        consola.error(
+          `Error loading model of type '${sprintBad(loader.name)}'`
+        );
+        consola.trace(error);
+        return undefined;
       }
-
-      errorLogger(
-        `Model loader '${sprintBad(
-          loader.name
-        )}' does not define any load function.`
-      );
-      return undefined;
-    } catch (error) {
-      consola.error(`Error loading model of type '${sprintBad(loader.name)}'`);
-      consola.trace(error);
-      return undefined;
-    }
-  };
-
-  return {
-    loadModelFromContent,
-    loadModelFromPath,
+    },
   };
 }

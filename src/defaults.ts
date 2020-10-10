@@ -25,7 +25,7 @@ export const defaultGlobalOptions: RequiredGlobalOptionsOnly = {
 };
 
 export const defaultOutputOptions: RequiredOutputOptionsOnly = {
-  outDir: '.',
+  outDir: undefined,
   overwrite: undefined,
 };
 

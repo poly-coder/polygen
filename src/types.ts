@@ -1,4 +1,4 @@
-import { LogLevel } from 'consola';
+import { Consola, LogLevel } from 'consola';
 
 export type Variables = Readonly<Record<string, string>>;
 export type GeneratorHelpers = Readonly<Record<string, any>>;
@@ -91,7 +91,7 @@ export interface RequiredPrintOptionsOnly {
 
 export interface RequiredOutputOptionsOnly {
   readonly overwrite?: boolean;
-  readonly outDir: string;
+  readonly outDir?: string;
 }
 
 export interface RequiredInitOptionsOnly {
@@ -171,6 +171,13 @@ export interface RequiredRunOptions
  *     Configuration File     *
  ******************************/
 
+export interface IFileLocator {
+  readonly outDir: string;
+  readonly atCWD: (...paths: string[]) => string;
+  readonly atBasePath: (...paths: string[]) => string;
+  readonly atOutDir: (...paths: string[]) => string;
+}
+
 export interface IModelLoaderConfig {
   readonly name: string;
   readonly extensions?: string[];
@@ -179,19 +186,28 @@ export interface IModelLoaderConfig {
   readonly fromPath?: (path: string) => Promise<any | undefined>;
 }
 
-export interface IModelLoaders {
+export interface LoadModelFromOptions {
+  readonly isOptional?: boolean;
+  readonly replaceVariables?: boolean;
+}
+
+export interface LoadModelFromContentOptions extends LoadModelFromOptions {
+  readonly loaderName: string;
+}
+
+export interface LoadModelFromPathOptions extends LoadModelFromOptions {
+  readonly loaderName?: string;
+}
+
+export interface IModelLoaders extends IFileLocator {
   readonly loadModelFromContent: (
     content: string,
-    loaderName: string,
-    isOptional?: boolean | undefined,
-    replaceVariables?: boolean | undefined
+    options: LoadModelFromContentOptions
   ) => Promise<any | undefined>;
 
   readonly loadModelFromPath: (
     filePath: string,
-    loaderName?: string | undefined,
-    isOptional?: boolean | undefined,
-    replaceVariables?: boolean | undefined
+    options?: LoadModelFromPathOptions
   ) => Promise<any | undefined>;
 }
 
@@ -212,37 +228,46 @@ export interface ITemplateRunnerConfig {
   ) => Promise<string | undefined>;
 }
 
-export interface ITemplateRunners {
+export interface RenderTemplateFromContentOptions {
+  readonly engine: string;
+  readonly engineOptions?: any;
+}
+
+export interface RenderTemplateFromPathOptions {
+  readonly engine?: string;
+  readonly engineOptions?: any;
+}
+
+export interface ITemplateRunners extends IFileLocator {
   readonly renderTemplateFromContent: (
     content: string,
     context: any,
-    engine: string,
-    engineOptions?: any
+    options: RenderTemplateFromContentOptions
   ) => Promise<string | undefined>;
 
   readonly renderTemplateFromPath: (
     filePath: string,
     context: any,
-    engine?: string,
-    engineOptions?: any
+    options?: RenderTemplateFromPathOptions
   ) => Promise<string | undefined>;
 }
 
-export interface IConfigurationFile extends InitOptionsOnly, OutputOptionsOnly {
-  readonly useDefaultModelLoaders?: boolean;
-  readonly useDefaultTemplateRunners?: boolean;
+export interface IPlugginExtensions {
   readonly modelLoaders?: IModelLoaderConfig[];
   readonly templateRunners?: ITemplateRunnerConfig[];
+}
+
+export interface IConfigurationFile
+  extends InitOptionsOnly,
+    OutputOptionsOnly,
+    IPlugginExtensions {
+  readonly loadDefaultPlugins?: boolean;
 }
 
 export interface IConfiguration
   extends RequiredInitOptionsOnly,
     IModelLoaders,
     ITemplateRunners {
-  readonly atCWD: (...paths: string[]) => string;
-  readonly atBasePath: (...paths: string[]) => string;
-  readonly atOutDir: (...paths: string[]) => string;
-
   readonly variables: Variables;
 }
 
@@ -252,7 +277,9 @@ export interface IConfiguration
 
 export type ModelDetails = Record<string, string>;
 
-export interface IGeneratorModelFile extends OutputOptionsOnly {
+export interface IGeneratorModelFile
+  extends OutputOptionsOnly,
+    IPlugginExtensions {
   readonly defaultCommandMode?: string;
   readonly defaultCommand?: string;
   readonly caption?: string;
@@ -264,7 +291,7 @@ export interface IGeneratorModelFile extends OutputOptionsOnly {
   readonly commands: ICommandModel[];
 }
 
-export interface ICommandModel {
+export interface ICommandModel extends IPlugginExtensions {
   readonly name: string;
   readonly module?: string;
   readonly folder?: string;
@@ -282,9 +309,13 @@ export interface IOperationBase {
   readonly configuration: IConfiguration;
 }
 
-export interface IGenerator extends IOperationBase {
+export interface IGenerator
+  extends IOperationBase,
+    IModelLoaders,
+    ITemplateRunners {
   readonly generatorName: string;
   readonly basePath: string;
+  readonly outDir: string;
   readonly defaultCommandMode: CommandMode;
   readonly caption?: string;
   readonly summary?: string;
@@ -300,7 +331,11 @@ export interface IGenerator extends IOperationBase {
   readonly atCommands: (...paths: string[]) => string;
 }
 
-export interface ICommand extends IOperationBase, EngineConfigOptions {
+export interface ICommand
+  extends IOperationBase,
+    EngineConfigOptions,
+    IModelLoaders,
+    ITemplateRunners {
   readonly name: string;
   readonly commandMode: CommandMode;
   readonly caption?: string;
@@ -337,12 +372,15 @@ export interface CopyCommandStep extends ITargetFileCommandStep {
   readonly from: string;
 }
 
-export interface TemplateCommandStepBase extends ITargetFileCommandStep, LoadModelOptions, EngineConfigOptions {
+export interface TemplateCommandStepBase
+  extends ITargetFileCommandStep,
+    LoadModelOptions,
+    EngineConfigOptions {
   readonly from: string;
 }
 
 export interface TemplateCommandStep extends TemplateCommandStepBase {
-  readonly type: 'template';
+  readonly type: 'file';
 }
 
 export interface SnippetCommandStep extends TemplateCommandStepBase {
@@ -375,9 +413,13 @@ export interface ICommandStep extends IOperationBase {
 export interface IGeneratorFileSystem {
   readonly fileExists: (filePath: string) => Promise<boolean>;
   readonly readFile: (filePath: string) => Promise<string | undefined>;
-  readonly writeFile: (message: string, filePath: string, content: string) => void;
+  readonly writeFile: (
+    message: string,
+    filePath: string,
+    content: string
+  ) => void;
   readonly writeMessage: (message: string) => void;
-  readonly beginScope: (message: string, endMessage?: string) => (() => void);
+  readonly beginScope: (message: string, endMessage?: string) => () => void;
 }
 
 export interface IOperationContext {
@@ -388,6 +430,7 @@ export interface IOperationContext {
   readonly options: RequiredRunOptions;
   readonly configuration: IConfiguration;
   readonly fileSystem: IGeneratorFileSystem;
+  readonly console: Consola;
 }
 
 export interface IGeneratorContext extends IOperationContext {

@@ -5,7 +5,7 @@ import {
   createModelLoaders,
 } from '../model-loaders';
 import { IFileLocator, IOperationContext } from '../types';
-import { mockStatFor } from './test-utils';
+import { createCodedError, mockStatFor } from './test-utils';
 
 jest.mock('fs-extra');
 
@@ -156,13 +156,14 @@ describe('createModelLoaders', () => {
     consola.mockTypes(() => jest.fn());
   });
 
-  const createPlugin = (
-    num: number,
+  const createFullPlugin = (
+    name: string,
+    extensions: string[] | undefined,
     fromContent: boolean,
     fromPath: boolean
   ) => ({
-    name: 'plugin' + num,
-    extensions: ['.p' + num, '.pp' + num],
+    name,
+    extensions,
     fromContent: fromContent
       ? jest
           .fn<Promise<any>, [string, any]>()
@@ -182,6 +183,17 @@ describe('createModelLoaders', () => {
           })
       : undefined,
   });
+
+  const createPlugin = (
+    num: number,
+    fromContent: boolean,
+    fromPath: boolean
+  ) => createFullPlugin(
+    `plugin${num}`,
+    [`.p${num}`, `.pp${num}`],
+    fromContent, 
+    fromPath
+  );
 
   it('it should be a function', () =>
     expect(createModelLoaders).toEqual(expect.any(Function)));
@@ -284,6 +296,163 @@ describe('createModelLoaders', () => {
         );
       });
 
+      describe('When calling loadModelFromContent for a plugin with fromContent', () => {
+        it('with no replace variables, it should return the expected model', async () => {
+          const plugins = {
+            loaders: [
+              createPlugin(1, true, false),
+              createPlugin(2, false, true),
+              createPlugin(3, false, false),
+            ],
+          };
+
+          const varName = 'MY_VAR';
+          const varValue = 'VAR_VALUE';
+          const content = `Model content with %${varName}%.`;
+
+          const loaders = createModelLoaders(
+            plugins,
+            createFallbackModelLoader(fileLocator),
+            false
+          );
+
+          const context: IOperationContext = {
+            vars: {
+              [varName]: varValue,
+            },
+          } as any;
+
+          const actual = await loaders.loadModelFromContent(content, context, {
+            loaderName: 'plugin1',
+            isOptional: false,
+            replaceVariables: false,
+          });
+
+          expect(actual).toEqual({ content });
+          expect(plugins.loaders[0].fromContent).toHaveBeenCalledTimes(1);
+          expect(plugins.loaders[0].fromContent).toHaveBeenCalledWith(
+            content,
+            context
+          );
+        });
+
+        it('with replace variables, it should return the expected model', async () => {
+          const plugins = {
+            loaders: [
+              createPlugin(1, true, false),
+              createPlugin(2, false, true),
+              createPlugin(3, false, false),
+            ],
+          };
+
+          const varName = 'MY_VAR';
+          const varValue = 'VAR_VALUE';
+          const content = `Model content with %${varName}%.`;
+
+          const loaders = createModelLoaders(
+            plugins,
+            createFallbackModelLoader(fileLocator),
+            false
+          );
+
+          const context: IOperationContext = {
+            vars: {
+              [varName]: varValue,
+            },
+          } as any;
+
+          const actual = await loaders.loadModelFromContent(content, context, {
+            loaderName: 'plugin1',
+            isOptional: false,
+            replaceVariables: true,
+          });
+
+          const expectedContent = content.replace(`%${varName}%`, varValue);
+          expect(actual).toEqual({ content: expectedContent });
+          expect(plugins.loaders[0].fromContent).toHaveBeenCalledTimes(1);
+          expect(plugins.loaders[0].fromContent).toHaveBeenCalledWith(
+            expectedContent,
+            context
+          );
+        });
+      });
+
+      describe('When calling loadModelFromContent for a plugin with no fromContent', () => {
+        it('it should return the expected model', async () => {
+          const plugins = {
+            loaders: [
+              createPlugin(1, true, false),
+              createPlugin(2, false, true),
+              createPlugin(3, false, false),
+            ],
+          };
+
+          const content = `Model content`;
+
+          const loaders = createModelLoaders(
+            plugins,
+            createFallbackModelLoader(fileLocator),
+            false
+          );
+
+          const context: IOperationContext = {} as any;
+
+          const actual = await loaders.loadModelFromContent(content, context, {
+            loaderName: 'plugin2',
+            isOptional: false,
+            replaceVariables: false,
+          });
+
+          expect(actual).toBeUndefined();
+          expect(plugins.loaders[1].fromPath).not.toHaveBeenCalled();
+          expect(consola.log).toHaveBeenCalledWith(
+            expect.stringContaining('plugin2')
+          );
+          expect(consola.log).toHaveBeenCalledWith(
+            expect.stringContaining('filePath')
+          );
+        });
+      });
+
+      describe('When calling loadModelFromContent for a plugin which throws error', () => {
+        it('it should return the expected model', async () => {
+          const plugins = {
+            loaders: [
+              createPlugin(1, true, false),
+              createPlugin(2, false, true),
+              createPlugin(3, false, false),
+            ],
+          };
+
+          const error = createCodedError('Plugin error', 'UNKNOWN');
+
+          plugins.loaders[0].fromContent?.mockRejectedValue(error);
+
+          const content = `Model content`;
+
+          const loaders = createModelLoaders(
+            plugins,
+            createFallbackModelLoader(fileLocator),
+            false
+          );
+
+          const context: IOperationContext = {} as any;
+
+          const actual = await loaders.loadModelFromContent(content, context, {
+            loaderName: 'plugin1',
+            isOptional: false,
+            replaceVariables: false,
+          });
+
+          expect(actual).toBeUndefined();
+          expect(plugins.loaders[0].fromContent).toHaveBeenCalledTimes(1);
+          expect(consola.error).toHaveBeenCalledWith(
+            expect.stringContaining('plugin1')
+          );
+          expect(consola.trace).toHaveBeenCalledWith(error);
+        });
+      });
+
       describe('When calling loadModelFromPath for a plugin with fromPath and when the model exists', () => {
         it('with loaderName, it should return the expected model', async () => {
           const plugins = {
@@ -294,7 +463,7 @@ describe('createModelLoaders', () => {
             ],
           };
 
-          const fileName = 'my-model.mdl'
+          const fileName = 'my-model.mdl';
 
           const statMock = mockStatFor(fs.stat, fileName, 'file');
 
@@ -306,20 +475,19 @@ describe('createModelLoaders', () => {
 
           const context: IOperationContext = {} as any;
 
-          const actual = await loaders.loadModelFromPath(
-            fileName,
-            context,
-            {
-              loaderName: 'plugin2',
-              isOptional: false,
-              replaceVariables: false,
-            }
-          );
+          const actual = await loaders.loadModelFromPath(fileName, context, {
+            loaderName: 'plugin2',
+            isOptional: false,
+            replaceVariables: false,
+          });
 
           expect(statMock).toHaveBeenCalledWith(fileName);
           expect(actual).toEqual({ filePath: fileName });
           expect(plugins.loaders[1].fromPath).toHaveBeenCalledTimes(1);
-          expect(plugins.loaders[1].fromPath).toHaveBeenCalledWith(fileName, context);
+          expect(plugins.loaders[1].fromPath).toHaveBeenCalledWith(
+            fileName,
+            context
+          );
         });
 
         it('with extension name, it should return the expected model', async () => {
@@ -331,7 +499,7 @@ describe('createModelLoaders', () => {
             ],
           };
 
-          const fileName = 'my-model.p2'
+          const fileName = 'my-model.p2';
 
           const statMock = mockStatFor(fs.stat, fileName, 'file');
 
@@ -343,19 +511,18 @@ describe('createModelLoaders', () => {
 
           const context: IOperationContext = {} as any;
 
-          const actual = await loaders.loadModelFromPath(
-            fileName,
-            context,
-            {
-              isOptional: false,
-              replaceVariables: false,
-            }
-          );
+          const actual = await loaders.loadModelFromPath(fileName, context, {
+            isOptional: false,
+            replaceVariables: false,
+          });
 
           expect(statMock).toHaveBeenCalledWith(fileName);
           expect(actual).toEqual({ filePath: fileName });
           expect(plugins.loaders[1].fromPath).toHaveBeenCalledTimes(1);
-          expect(plugins.loaders[1].fromPath).toHaveBeenCalledWith(fileName, context);
+          expect(plugins.loaders[1].fromPath).toHaveBeenCalledWith(
+            fileName,
+            context
+          );
         });
       });
 
@@ -369,7 +536,7 @@ describe('createModelLoaders', () => {
             ],
           };
 
-          const fileName = 'my-model.mdl'
+          const fileName = 'my-model.mdl';
 
           const statMock = mockStatFor(fs.stat, 'my-other-model.mdl', 'file');
 
@@ -381,23 +548,21 @@ describe('createModelLoaders', () => {
 
           const context: IOperationContext = {} as any;
 
-          const actual = await loaders.loadModelFromPath(
-            fileName,
-            context,
-            {
-              loaderName: 'plugin2',
-              isOptional: false,
-              replaceVariables: false,
-            }
-          );
+          const actual = await loaders.loadModelFromPath(fileName, context, {
+            loaderName: 'plugin2',
+            isOptional: false,
+            replaceVariables: false,
+          });
 
           expect(statMock).toHaveBeenCalledWith(fileName);
           expect(actual).toBeUndefined();
           expect(plugins.loaders[1].fromPath).not.toHaveBeenCalled();
           expect(consola.log).toHaveBeenCalledTimes(1);
-          expect(consola.log).toHaveBeenCalledWith(expect.stringContaining(fileName));
+          expect(consola.log).toHaveBeenCalledWith(
+            expect.stringContaining(fileName)
+          );
         });
-        
+
         it('with optional model, it should return the expected model', async () => {
           const plugins = {
             loaders: [
@@ -407,7 +572,7 @@ describe('createModelLoaders', () => {
             ],
           };
 
-          const fileName = 'my-model.mdl'
+          const fileName = 'my-model.mdl';
 
           const statMock = mockStatFor(fs.stat, 'my-other-model.mdl', 'file');
 
@@ -419,20 +584,18 @@ describe('createModelLoaders', () => {
 
           const context: IOperationContext = {} as any;
 
-          const actual = await loaders.loadModelFromPath(
-            fileName,
-            context,
-            {
-              loaderName: 'plugin2',
-              isOptional: true,
-              replaceVariables: false,
-            }
-          );
+          const actual = await loaders.loadModelFromPath(fileName, context, {
+            loaderName: 'plugin2',
+            isOptional: true,
+            replaceVariables: false,
+          });
 
           expect(statMock).toHaveBeenCalledWith(fileName);
           expect(actual).toBeUndefined();
           expect(plugins.loaders[1].fromPath).not.toHaveBeenCalled();
-          expect(consola.trace).toHaveBeenCalledWith(expect.stringContaining(fileName));
+          expect(consola.trace).toHaveBeenCalledWith(
+            expect.stringContaining(fileName)
+          );
         });
       });
     });

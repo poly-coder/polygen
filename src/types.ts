@@ -240,7 +240,7 @@ export interface IModelValidatorConfig {
 }
 
 export interface ValidateModelFromOptions {
-  readonly context?: boolean;
+  readonly context?: ICommandContext;
   readonly validatorOptions?: any;
 }
 
@@ -263,7 +263,7 @@ export interface IModelValidators extends IFileLocator {
   readonly validateModelFromPath: (
     filePath: string,
     model: any,
-    options?: ValidateModelFromContentOptions
+    options?: ValidateModelFromPathOptions
   ) => Promise<boolean | undefined>;
 }
 
@@ -368,10 +368,10 @@ export interface ICommandModel extends IPlugginExtensions {
   readonly requireName?: boolean;
   readonly requireModel?: boolean;
   readonly validation?: {
-    readonly modelSchema?: any;
+    readonly schemaFile?: string;
     readonly validator?: string;
     readonly validatorOptions?: any;
-  }
+  };
 }
 
 /***********************************
@@ -435,6 +435,11 @@ export interface ICommand
 
   readonly generator: IGenerator;
 
+  readonly validateModel: (
+    model: any,
+    context: ICommandContext
+  ) => Promise<boolean>;
+  
   readonly runCommand: (
     context: ICommandContext
   ) => Promise<ICommandResult | undefined>;

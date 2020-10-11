@@ -282,6 +282,29 @@ export async function loadCommand(
 
   const templateHelpers = createTemplateHelpers(commandModel, generator, false);
 
+  const validateModel = async (model: any, context: ICommandContext) => {
+    if (!commandModel.validation?.schemaFile) {
+      return true;
+    }
+
+    try {
+      const result = await modelValidators.validateModelFromPath(
+        commandModel.validation?.schemaFile,
+        model,
+        { 
+          context,
+          validatorName: commandModel.validation?.validator, 
+          validatorOptions: commandModel.validation?.validatorOptions,
+        })
+
+      return result ?? true;
+    } catch (error) {
+      consola.error(`Error validating model: ${error?.message ?? 'Unknown'}`)
+      consola.trace(error)
+      return false;
+    }
+  };
+
   const command: ICommand = {
     generator,
     variables,
@@ -299,6 +322,7 @@ export async function loadCommand(
     ...templateHelpers,
 
     runCommand,
+    validateModel,
     configuration: generator.configuration,
   };
 

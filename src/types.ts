@@ -454,23 +454,27 @@ export interface ICommand
 export interface ICommandStepBase {
   readonly stepTags?: string[];
   readonly skip?: boolean;
+  readonly if?: (context: IStepContext) => boolean | Promise<boolean>;
+  readonly each?: (context: IStepContext) => any[] | Promise<any[]>;
 }
 
+export type ValueOrParam1Func<T, P = any> = T | ((p: P) => T | Promise<T>);
+
 export interface ITargetFileCommandStep extends ICommandStepBase {
-  readonly to: string;
-  readonly overwrite?: boolean;
+  readonly to: ValueOrParam1Func<string, IStepContext>;
+  readonly overwrite?: ValueOrParam1Func<boolean, IStepContext>;
 }
 
 export interface CopyCommandStep extends ITargetFileCommandStep {
   readonly type: 'copy';
-  readonly from: string;
+  readonly from: ValueOrParam1Func<string, IStepContext>;
 }
 
 export interface TemplateCommandStepBase
   extends ITargetFileCommandStep,
     LoadModelOptions,
     EngineConfigOptions {
-  readonly from: string;
+  readonly from: ValueOrParam1Func<string, IStepContext>;
 }
 
 export interface TemplateCommandStep extends TemplateCommandStepBase {

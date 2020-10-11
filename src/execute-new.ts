@@ -22,7 +22,10 @@ import {
   sprintWarn,
 } from './logging';
 import { matchTags, searchGenerators } from './searching';
-import { createFallbackTemplateHelpers, createTemplateHelpers } from './template-helpers';
+import {
+  createFallbackTemplateHelpers,
+  createTemplateHelpers,
+} from './template-helpers';
 import {
   CommandStep,
   CopyCommandStep,
@@ -39,7 +42,18 @@ import {
   RunOptions,
   SnippetCommandStep,
   TemplateCommandStep,
+  ValueOrParam1Func,
 } from './types';
+
+async function getValue1<T, P>(
+  valueOrFunc: ValueOrParam1Func<T, P>,
+  p: P
+): Promise<T> {
+  if (typeof valueOrFunc === 'function') {
+    return await (valueOrFunc as any)(p);
+  }
+  return valueOrFunc;
+}
 
 interface InternalFileSystem {
   readonly fileSystem: IGeneratorFileSystem;
@@ -79,16 +93,15 @@ function createFileSystem(configuration: IConfiguration): InternalFileSystem {
     },
   ];
 
-  const getNormalizedPath = (filePath: string) => 
-    path.normalize(filePath);
+  const getNormalizedPath = (filePath: string) => path.normalize(filePath);
 
-  const getFullPath = (normalizedPath: string) => 
+  const getFullPath = (normalizedPath: string) =>
     path.resolve(configuration.atCWD(normalizedPath));
 
   const getFilePaths = (filePath: string): [string, string] => {
     const normalizedPath = getNormalizedPath(filePath);
     return [normalizedPath, getFullPath(normalizedPath)];
-  }
+  };
 
   const fileExists = async (filePath: string) => {
     const [normalizedPath, fullPath] = getFilePaths(filePath);
@@ -292,40 +305,90 @@ function createStepContext(
   return Object.assign(stepContext, { self: stepContext });
 }
 
-async function executeCopyStep(
+async function executeStep(
+  name: string,
+  startMessage: string,
+  stepDefinition: CommandStep,
+  parentContext: ICommandContext,
+  createModel: () => Promise<any>,
+  action: (context: IStepContext) => Promise<number>
+): Promise<number> {
+  const logPrefix = createLogPrefix(name);
+
+  consola.trace(`${logPrefix}: [Start] ${startMessage}`);
+
+  const model = await createModel();
+
+  const stepContext = createStepContext(stepDefinition, parentContext, model);
+
+  const iterations: IStepContext[] = stepDefinition.each
+    ? (await stepDefinition.each(stepContext)).map((result) =>
+        result ? { ...stepContext, ...result } : stepContext
+      )
+    : [stepContext];
+
+  for (const context of iterations) {
+    if (stepDefinition.if && !(await stepDefinition.if(context))) {
+      continue;
+    }
+
+    const result = await action(context);
+
+    if (result !== 0) {
+      return result;
+    }
+  }
+
+  return 0;
+}
+
+function executeCopyStep(
   stepDefinition: CopyCommandStep,
   parentContext: ICommandContext
 ): Promise<number> {
-  const logPrefix = createLogPrefix('executeCopyStep');
+  return executeStep(
+    'executeCopyStep',
+    `'${
+      typeof stepDefinition.from === 'string' ? stepDefinition.from : '...'
+    }' to '${
+      typeof stepDefinition.to === 'string' ? stepDefinition.to : '...'
+    }'`,
+    stepDefinition,
+    parentContext,
+    () => Promise.resolve(undefined),
+    async (context) => {
+      const toFile = await getValue1(stepDefinition.to, context);
 
-  consola.trace(
-    `${logPrefix}: [Start] '${stepDefinition.from}' to '${stepDefinition.to}'`
+      if (await shouldSkipStep(stepDefinition, context, toFile)) {
+        return 0;
+      }
+
+      const fromFile = await getValue1(stepDefinition.from, context);
+
+      const sourcePath = context.generator.atTemplates(fromFile);
+
+      const content = await context.fileSystem.readFile(sourcePath);
+
+      if (!content) {
+        consola.log(
+          `File '${sprintBad(
+            sourcePath
+          )}' was not found to be copied to '${sprintGood(toFile)}'`
+        );
+        return -1;
+      }
+
+      const targetPath = context.command.atOutDir(toFile);
+
+      context.fileSystem.writeFile(
+        chalk`{green ${'Copy'}} from '{white ${sourcePath}}' to '{white ${targetPath}}'.`,
+        targetPath,
+        content
+      );
+
+      return 0;
+    }
   );
-
-  const stepContext = createStepContext(stepDefinition, parentContext);
-
-  const sourcePath = stepContext.generator.atTemplates(stepDefinition.from);
-
-  const content = await stepContext.fileSystem.readFile(sourcePath);
-
-  if (!content) {
-    consola.log(
-      `File '${sprintBad(
-        sourcePath
-      )}' was not found to be copied to '${sprintGood(stepDefinition.to)}'`
-    );
-    return -1;
-  }
-
-  const targetPath = stepContext.command.atOutDir(stepDefinition.to);
-
-  stepContext.fileSystem.writeFile(
-    chalk`{green ${'Copy'}} from '{white ${sourcePath}}' to '{white ${targetPath}}'.`,
-    targetPath,
-    content
-  );
-
-  return 0;
 }
 
 function searchStepEngine(
@@ -367,54 +430,62 @@ function searchStepEngine(
   return [engine, engineOptions];
 }
 
-async function executeTemplateStep(
+function executeTemplateStep(
   stepDefinition: TemplateCommandStep,
   parentContext: ICommandContext
 ): Promise<number> {
-  const logPrefix = createLogPrefix('executeTemplateStep');
-
-  consola.trace(
-    `${logPrefix}: [Start] '${stepDefinition.from}' to '${stepDefinition.to}'`
-  );
-
-  const model = await loadModel(
-    parentContext.model,
+  return executeStep(
+    'executeCopyStep',
+    `'${
+      typeof stepDefinition.from === 'string' ? stepDefinition.from : '...'
+    }' to '${
+      typeof stepDefinition.to === 'string' ? stepDefinition.to : '...'
+    }'`,
     stepDefinition,
-    parentContext.command,
     parentContext,
-    { isOptional: false, replaceVariables: false }
+    () =>
+      loadModel(
+        parentContext.model,
+        stepDefinition,
+        parentContext.command,
+        parentContext,
+        { isOptional: false, replaceVariables: false }
+      ),
+    async (context) => {
+      const fromFile = await getValue1(stepDefinition.from, context);
+
+      const toFile = await getValue1(stepDefinition.to, context);
+
+      const templatePath = context.generator.atTemplates(fromFile);
+
+      const [engine, engineOptions] = searchStepEngine(context);
+
+      const content = await context.configuration.renderTemplateFromPath(
+        templatePath,
+        context,
+        { engine, engineOptions }
+      );
+
+      if (content === undefined) {
+        consola.log(
+          `Failed using template '${sprintBad(
+            templatePath
+          )}' with engine '${sprintBad(engine)}'`
+        );
+        return -1;
+      }
+
+      const targetPath = context.command.atOutDir(toFile);
+
+      context.fileSystem.writeFile(
+        chalk`{green ${'Generated'}} '{white ${targetPath}}' from template '{white ${templatePath}}'.`,
+        targetPath,
+        content
+      );
+
+      return 0;
+    }
   );
-
-  const stepContext = createStepContext(stepDefinition, parentContext, model);
-
-  const templatePath = stepContext.generator.atTemplates(stepDefinition.from);
-
-  const [engine, engineOptions] = searchStepEngine(stepContext);
-
-  const content = await stepContext.configuration.renderTemplateFromPath(
-    templatePath,
-    stepContext,
-    { engine, engineOptions }
-  );
-
-  if (content === undefined) {
-    consola.log(
-      `Failed using template '${sprintBad(
-        templatePath
-      )}' with engine '${sprintBad(engine)}'`
-    );
-    return -1;
-  }
-
-  const targetPath = stepContext.command.atOutDir(stepDefinition.to);
-
-  stepContext.fileSystem.writeFile(
-    chalk`{green ${'Generated'}} '{white ${targetPath}}' from template '{white ${templatePath}}'.`,
-    targetPath,
-    content
-  );
-
-  return 0;
 }
 
 const findContainerPosition = (
@@ -479,92 +550,100 @@ const findContainerPosition = (
   return [index, length];
 };
 
-async function executeSnippetStep(
+function executeSnippetStep(
   stepDefinition: SnippetCommandStep,
   parentContext: ICommandContext
 ): Promise<number> {
-  const logPrefix = createLogPrefix('executeSnippetStep');
-
-  consola.trace(
-    `${logPrefix}: [Start] '${stepDefinition.from}' to '${stepDefinition.to}'`
-  );
-
-  const model = await loadModel(
-    parentContext.model,
+  return executeStep(
+    'executeSnippetStep',
+    `'${
+      typeof stepDefinition.from === 'string' ? stepDefinition.from : '...'
+    }' to '${
+      typeof stepDefinition.to === 'string' ? stepDefinition.to : '...'
+    }'`,
     stepDefinition,
-    parentContext.command,
     parentContext,
-    { isOptional: false, replaceVariables: false }
+    () =>
+      loadModel(
+        parentContext.model,
+        stepDefinition,
+        parentContext.command,
+        parentContext,
+        { isOptional: false, replaceVariables: false }
+      ),
+    async (context) => {
+      const fromFile = await getValue1(stepDefinition.from, context);
+
+      const toFile = await getValue1(stepDefinition.to, context);
+
+      const targetPath = context.command.atOutDir(toFile);
+
+      const targetContent = await context.fileSystem.readFile(targetPath);
+
+      if (targetContent === undefined) {
+        consola.log(
+          `File '${sprintBad(
+            targetPath
+          )}' does not exists, and snippets require to be inserted in existing files. Add a previous step to create the container file previous to the snippet step.`
+        );
+        return -1;
+      }
+
+      const startPositions = findContainerPosition(
+        targetContent,
+        stepDefinition.start,
+        stepDefinition.startRegExp
+      );
+      const endPositions = findContainerPosition(
+        targetContent,
+        stepDefinition.start,
+        stepDefinition.startRegExp
+      );
+
+      if (!startPositions || !endPositions) {
+        return -1;
+      }
+
+      const [startIndex, startLength] = startPositions;
+      const [endIndex] = endPositions;
+
+      if (endIndex < startIndex + startLength) {
+        consola.log(`Found snippet boundaries in the wrong position`);
+        return -1;
+      }
+
+      const templatePath = context.generator.atTemplates(fromFile);
+
+      const [engine, engineOptions] = searchStepEngine(context);
+
+      const snippetContent = await context.configuration.renderTemplateFromPath(
+        templatePath,
+        context,
+        { engine, engineOptions }
+      );
+
+      if (snippetContent === undefined) {
+        consola.log(
+          `Failed using template '${sprintBad(
+            templatePath
+          )}' with engine '${sprintBad(engine)}'`
+        );
+        return -1;
+      }
+
+      const startContent = targetContent.substring(0, startIndex + startLength);
+      const endContent = targetContent.substring(endIndex);
+      const content = startContent + snippetContent + endContent;
+
+      context.fileSystem.writeFile(
+        chalk`{green ${'Patched'}} '{white ${targetPath}}' from snippet '{white ${templatePath}}'.`,
+        targetPath,
+        content
+      );
+
+      return 0;
+    }
   );
-
-  const stepContext = createStepContext(stepDefinition, parentContext, model);
-
-  const targetPath = stepContext.command.atOutDir(stepDefinition.to);
-
-  const targetContent = await stepContext.fileSystem.readFile(targetPath);
-
-  if (targetContent === undefined) {
-    consola.log(
-      `File '${sprintBad(
-        targetPath
-      )}' does not exists, and snippets require to be inserted in existing files. Add a previous step to create the container file previous to the snippet step.`
-    );
-    return -1;
-  }
-
-  const startPositions = findContainerPosition(
-    targetContent,
-    stepDefinition.start,
-    stepDefinition.startRegExp
-  );
-  const endPositions = findContainerPosition(
-    targetContent,
-    stepDefinition.start,
-    stepDefinition.startRegExp
-  );
-
-  if (!startPositions || !endPositions) {
-    return -1;
-  }
-
-  const [startIndex, startLength] = startPositions;
-  const [endIndex] = endPositions;
-
-  if (endIndex < startIndex + startLength) {
-    consola.log(`Found snippet boundaries in the wrong position`);
-    return -1;
-  }
-
-  const templatePath = stepContext.generator.atTemplates(stepDefinition.from);
-
-  const [engine, engineOptions] = searchStepEngine(stepContext);
-
-  const snippetContent = await stepContext.configuration.renderTemplateFromPath(
-    templatePath,
-    stepContext,
-    { engine, engineOptions }
-  );
-
-  if (snippetContent === undefined) {
-    consola.log(
-      `Failed using template '${sprintBad(
-        templatePath
-      )}' with engine '${sprintBad(engine)}'`
-    );
-    return -1;
-  }
-
-  const startContent = targetContent.substring(0, startIndex + startLength);
-  const endContent = targetContent.substring(endIndex);
-  const content = startContent + snippetContent + endContent;
-
-  stepContext.fileSystem.writeFile(
-    chalk`{green ${'Patched'}} '{white ${targetPath}}' from snippet '{white ${templatePath}}'.`,
-    targetPath,
-    content
-  );
-
-  return 0;
 }
 
 async function createCommandContext(
@@ -586,7 +665,8 @@ async function createCommandContext(
 
 async function shouldSkipStep(
   stepDefinition: CommandStep,
-  commandContext: ICommandContext
+  stepContext: IStepContext,
+  toFile: string
 ) {
   if (stepDefinition.skip) {
     consola.trace(
@@ -597,7 +677,7 @@ async function shouldSkipStep(
     return true;
   }
 
-  if (!matchTags(stepDefinition.stepTags, commandContext.options.stepTag)) {
+  if (!matchTags(stepDefinition.stepTags, stepContext.options.stepTag)) {
     consola.trace(
       `Skipping '${sprintInfo(
         stepDefinition.type
@@ -610,13 +690,14 @@ async function shouldSkipStep(
 
   if (
     'to' in stepDefinition &&
-    (stepDefinition.overwrite === false ||
-      commandContext.options.overwrite === false)
+    (stepContext.options.overwrite === false ||
+      (stepDefinition.overwrite &&
+        (await getValue1(stepDefinition.overwrite, stepContext)) === false))
   ) {
-    const toPath = commandContext.configuration.atOutDir(stepDefinition.to);
-    if (await commandContext.fileSystem.fileExists(toPath)) {
-      const who = stepDefinition.overwrite === false ? 'Step' : 'User';
-      commandContext.fileSystem.writeMessage(
+    const toPath = stepContext.configuration.atOutDir(toFile);
+    if (await stepContext.fileSystem.fileExists(toPath)) {
+      const who = stepContext.options.overwrite === false ? 'User' : 'Step';
+      stepContext.fileSystem.writeMessage(
         chalk`{cyan ${'Skip'}} generating to file '{white ${toPath}}'. {cyan ${who}} indicated no overwrite.`
       );
     }
@@ -659,10 +740,6 @@ async function executeCommand(
   }
 
   for (const stepDefinition of commandResult.steps) {
-    if (await shouldSkipStep(stepDefinition, commandContext)) {
-      continue;
-    }
-
     switch (stepDefinition.type) {
       case 'copy':
         {
@@ -765,13 +842,10 @@ async function executeRunGenerator(
 
   consola.trace(`${logPrefix}: [Start] '${generator.generatorName}'`);
 
-  const model = await loadModel(
-    undefined,
-    runOptions,
-    generator,
-    context,
-    { isOptional: false, replaceVariables: false }
-  );
+  const model = await loadModel(undefined, runOptions, generator, context, {
+    isOptional: false,
+    replaceVariables: false,
+  });
 
   const rootContext: IOperationContext = {
     ...context,
@@ -815,7 +889,11 @@ export async function runGenerator(options: RunOptions) {
 
   const fileSystem = createFileSystem(configuration);
 
-  const helpers = await createTemplateHelpers(config, createFallbackTemplateHelpers(), true);
+  const helpers = await createTemplateHelpers(
+    config,
+    createFallbackTemplateHelpers(),
+    true
+  );
 
   const context: IOperationContext = {
     configuration,
@@ -826,7 +904,6 @@ export async function runGenerator(options: RunOptions) {
     fileSystem: fileSystem.fileSystem,
     console: consola,
   };
-
 
   const generators = await searchGenerators(configuration, runOptions);
 

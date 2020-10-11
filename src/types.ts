@@ -207,13 +207,13 @@ export interface LoadModelFromPathOptions extends LoadModelFromOptions {
 export interface IModelLoaders extends IFileLocator {
   readonly loadModelFromContent: (
     content: string,
-    context: any,
+    context: IOperationContext,
     options: LoadModelFromContentOptions
   ) => Promise<any | undefined>;
 
   readonly loadModelFromPath: (
     filePath: string,
-    context: any,
+    context: IOperationContext,
     options?: LoadModelFromPathOptions
   ) => Promise<any | undefined>;
 }
@@ -322,9 +322,9 @@ export interface ITemplateHelpers {
   readonly createHelpers: () => Promise<any>;
 }
 
-// Pluggins
+// Plugins
 
-export interface IPlugginExtensions {
+export interface IPluginExtensions {
   readonly loaders?: IModelLoaderConfig[];
   readonly engines?: ITemplateRunnerConfig[];
   readonly helpers?: ITemplateHelpersConfig[];
@@ -338,7 +338,7 @@ export interface IPlugginExtensions {
 export interface IConfigurationFile
   extends InitOptionsOnly,
     OutputOptionsOnly,
-    IPlugginExtensions {
+    IPluginExtensions {
   readonly loadDefaultPlugins?: boolean;
 }
 
@@ -346,7 +346,7 @@ export type ModelDetails = Record<string, string>;
 
 export interface IGeneratorModelFile
   extends OutputOptionsOnly,
-    IPlugginExtensions {
+    IPluginExtensions {
   readonly defaultCommandMode?: string;
   readonly defaultCommand?: string;
   readonly caption?: string;
@@ -358,7 +358,7 @@ export interface IGeneratorModelFile
   readonly commands: ICommandModel[];
 }
 
-export interface ICommandModel extends IPlugginExtensions {
+export interface ICommandModel extends IPluginExtensions {
   readonly name: string;
   readonly module?: string;
   readonly folder?: string;

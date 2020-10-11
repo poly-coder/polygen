@@ -5,7 +5,6 @@ import {
   GlobalOptionsOnly,
   OutputOptionsOnly,
   PrintOptionsOnly,
-  SearchOptionsOnly,
 } from './types';
 
 export function getOptions<T extends GlobalOptionsOnly>(args: any): T {
@@ -23,11 +22,7 @@ export function addGlobalOptions(command: commander.Command) {
       '--config-file <file.js>',
       'Configuration file name for pcgen. Defaults to "pcgen.config.json"'
     )
-    .option(
-      '--show-options',
-      'Print options as JSON',
-      false
-    )
+    .option('--show-options', 'Print options as JSON', false)
     .option(
       '-l, --log-level <level>',
       'Log level. Any of: fatal or f, error or e, warning or warn or w, log or l, information or info or i, success or s, debug or d, trace or t, silent or verbose or v',
@@ -36,12 +31,11 @@ export function addGlobalOptions(command: commander.Command) {
     );
 }
 
-export function addSearchOptions(
-  command: commander.Command,
-  _options: SearchOptionsOnly
-) {
-  return command
-    .option('-t, --tag <tags...>', 'Search tags. Use a simple "tag1" "tag2" to search for generators that have any of them. Use "!tag" to exclude generators with given tag. Use "*tag" to require the prescense of given tag');
+export function addSearchOptions(command: commander.Command) {
+  return command.option(
+    '-t, --tag <tags...>',
+    'Search tags. Use a simple "tag1" "tag2" to search for generators that have any of them. Use "!tag" to exclude generators with given tag. Use "*tag" to require the prescense of given tag'
+  );
 }
 
 export function addPrintOptions(

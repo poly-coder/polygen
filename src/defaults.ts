@@ -17,38 +17,38 @@ import {
   RunOptions,
 } from './types';
 
-export const defaultGlobalOptions: RequiredGlobalOptionsOnly = {
+export const getDefaultGlobalOptions = (): RequiredGlobalOptionsOnly => ({
   configFile: 'pcgen.config.js',
   logLevel: LogLevel.Info,
   version: '',
   showOptions: false,
-};
+});
 
-export const defaultOutputOptions: RequiredOutputOptionsOnly = {
+export const getDefaultOutputOptions = (): RequiredOutputOptionsOnly => ({
   outDir: undefined,
   overwrite: undefined,
-};
+});
 
-export const defaultSearchOptions: RequiredSearchOptionsOnly = {
+export const getDefaultSearchOptions = (): RequiredSearchOptionsOnly => ({
   generator: undefined,
   tag: [],
-};
+});
 
-export const defaultPrintListOptions: RequiredPrintOptionsOnly = {
+export const getDefaultPrintListOptions = (): RequiredPrintOptionsOnly => ({
   showBasePath: false,
   showSummary: false,
   showCommands: false,
   showDetails: false,
-};
+});
 
-export const defaultPrintInfoOptions: RequiredPrintOptionsOnly = {
+export const getDefaultPrintInfoOptions = (): RequiredPrintOptionsOnly => ({
   showBasePath: true,
   showSummary: true,
   showCommands: true,
   showDetails: true,
-};
+});
 
-export const defaultInitOptions: RequiredInitOptionsOnly = {
+export const getDefaultInitOptions = (): RequiredInitOptionsOnly => ({
   cwd: '.',
   generatorFolder: 'generator',
   commandsFolder: 'commands',
@@ -59,49 +59,49 @@ export const defaultInitOptions: RequiredInitOptionsOnly = {
   ),
   pcgenFolder: '_pcgen',
   searchPaths: [],
-};
+});
 
-export const defaultRunOptions: RequiredRunOptionsOnly = {
+export const getDefaultRunOptions = (): RequiredRunOptionsOnly => ({
   command: '',
   dryRun: false,
   phases: '',
   stdout: false,
   stepTag: [],
-};
+});
 
 export function requiredInitOptions(options?: InitOptions): RequiredInitOptions {
   return {
-    ...defaultInitOptions,
-    ...defaultGlobalOptions,
+    outDir: '.',
+    ...getDefaultInitOptions(),
+    ...getDefaultGlobalOptions(),
     ...options,
-    outDir: '.'
   };
 }
 
 export function requiredListOptions(options?: ListOptions): RequiredListOptions {
   return {
-    ...defaultGlobalOptions,
-    ...defaultSearchOptions,
-    ...defaultPrintListOptions,
+    ...getDefaultGlobalOptions(),
+    ...getDefaultSearchOptions(),
+    ...getDefaultPrintListOptions(),
     ...options,
   };
 }
 
 export function requiredInfoOptions(options?: InfoOptions): RequiredInfoOptions {
   return {
-    ...defaultGlobalOptions,
-    ...defaultSearchOptions,
-    ...defaultPrintInfoOptions,
+    ...getDefaultGlobalOptions(),
+    ...getDefaultSearchOptions(),
+    ...getDefaultPrintInfoOptions(),
     ...options,
   };
 }
 
 export function requiredRunOptions(options?: RunOptions): RequiredRunOptions {
   return {
-    ...defaultRunOptions,
-    ...defaultGlobalOptions,
-    ...defaultSearchOptions,
-    ...defaultOutputOptions,
+    ...getDefaultRunOptions(),
+    ...getDefaultGlobalOptions(),
+    ...getDefaultSearchOptions(),
+    ...getDefaultOutputOptions(),
     ...options,
   };
 }

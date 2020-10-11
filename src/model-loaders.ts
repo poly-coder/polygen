@@ -11,11 +11,11 @@ import {
   IFileLocator,
   IModelLoaderConfig,
   IModelLoaders,
-  IPlugginExtensions,
+  IPluginExtensions,
   Variables,
 } from './types';
 
-export const defaultModelLoaders: IModelLoaderConfig[] = [
+const defaultModelLoaders: IModelLoaderConfig[] = [
   {
     name: 'module',
     extensions: ['.js'],
@@ -76,7 +76,7 @@ export const defaultModelLoaders: IModelLoaderConfig[] = [
   },
 ];
 
-export function replaceTextVariables(
+function replaceTextVariables(
   text: string,
   ...variables: Variables[]
 ): string {
@@ -99,7 +99,7 @@ export function createFallbackModelLoader(
 ): IModelLoaders {
   return {
     ...fileLocator,
-    loadModelFromContent: async (_content, options) => {
+    loadModelFromContent: async (_content, _context, options) => {
       const errorLogger =
         options.isOptional === true ? consola.trace : consola.log;
 
@@ -110,7 +110,7 @@ export function createFallbackModelLoader(
       );
       return undefined;
     },
-    loadModelFromPath: async (filePath, options) => {
+    loadModelFromPath: async (filePath, _context, options) => {
       const errorLogger =
         options?.isOptional === true ? consola.trace : consola.log;
 
@@ -125,8 +125,7 @@ export function createFallbackModelLoader(
 }
 
 export function createModelLoaders(
-  config: IPlugginExtensions,
-  variables: Variables,
+  config: IPluginExtensions,
   fallbackModelLoaders: IModelLoaders,
   loadDefaultPlugins: boolean
 ): IModelLoaders {
@@ -199,13 +198,11 @@ export function createModelLoaders(
 
       try {
         if (loader.fromContent) {
-          const text = await loader.fromContent(content, context);
           // Replace variables by default
           if (replaceVariables !== false) {
-            return replaceTextVariables(text, variables);
+            content = replaceTextVariables(content, context.vars);
           }
-
-          return text;
+          return await loader.fromContent(content, context);
         }
 
         errorLogger(
@@ -257,7 +254,7 @@ export function createModelLoaders(
           }
 
           if (replaceVariables === true) {
-            const text = replaceTextVariables(content, variables);
+            const text = replaceTextVariables(content, context.vars);
             return await loader.fromContent(text, context);
           }
 

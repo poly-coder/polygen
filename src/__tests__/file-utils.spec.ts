@@ -11,6 +11,7 @@ import {
   fsStatsOrNull,
   fsWriteFileContent,
   joinPaths,
+  globFiles,
 } from '../file-utils';
 import {
   createCodedError,
@@ -22,6 +23,7 @@ import {
 } from './test-utils';
 
 jest.mock('fs-extra');
+jest.mock('glob');
 
 describe('joinPaths', () => {
   beforeAll(() => {
@@ -68,7 +70,7 @@ describe('fsStatsOrNull', () => {
 
     const stat = mockStatFor(fs.stat, fileName, 'file');
 
-    const stats = await fsStatsOrNull(fileName)
+    const stats = await fsStatsOrNull(fileName);
     expect(stats).not.toBeUndefined();
     expect(stats?.isFile?.()).toBeTruthy();
     expect(stat).toHaveBeenCalledTimes(1);
@@ -435,7 +437,8 @@ describe('fsListDirectories', () => {
     consola.mockTypes(() => jest.fn());
   });
 
-  it('should be a function', () => expect(typeof fsListDirectories).toBe('function'));
+  it('should be a function', () =>
+    expect(typeof fsListDirectories).toBe('function'));
 
   it('with an existing directory  with files and directories, it should return all its files', async () => {
     const expected: string[] = ['file1', 'file2', 'dir1', 'dir2'];
@@ -458,5 +461,81 @@ describe('fsListDirectories', () => {
     expect(stat).toHaveBeenNthCalledWith(3, path.join(fileName, 'dir1'));
     expect(stat).toHaveBeenNthCalledWith(4, path.join(fileName, 'dir2'));
     expect(actual).toEqual(['dir1', 'dir2']);
+  });
+});
+
+describe('globFiles', () => {
+  beforeAll(() => {
+    consola.wrapAll();
+  });
+  beforeEach(() => {
+    consola.mockTypes(() => jest.fn());
+  });
+
+  it('should be a function', () => expect(typeof globFiles).toBe('function'));
+
+  describe('When some files are found', () => {
+    it('it should return all its files', async () => {
+      const globDefault: jest.Mock<any, any> = (await import('glob'))
+        .default as any;
+
+      globDefault.mockClear();
+      globDefault.mockImplementation((_, callback) => {
+        callback(undefined, ['matched-file.txt']);
+      });
+
+      const actual = await globFiles('./basePath', '*.myfile.*');
+
+      expect(actual).toEqual(['matched-file.txt']);
+      expect(globDefault).toHaveBeenCalledTimes(1);
+      expect(globDefault).toHaveBeenCalledWith(
+        path.join('./basePath', '*.myfile.*'),
+        expect.any(Function)
+      );
+    });
+  });
+
+  describe('When an ENOENT error is thrown', () => {
+    it('it should return empty result', async () => {
+      const globDefault: jest.Mock<any, any> = (await import('glob'))
+        .default as any;
+
+      globDefault.mockClear();
+      const error = createCodedError('Directory not found', 'ENOENT');
+      globDefault.mockImplementation((_, callback) => {
+        callback(error);
+      });
+
+      const actual = await globFiles('./basePath', '*.myfile.*');
+
+      expect(actual).toEqual([]);
+      expect(globDefault).toHaveBeenCalledTimes(1);
+      expect(globDefault).toHaveBeenCalledWith(
+        path.join('./basePath', '*.myfile.*'),
+        expect.any(Function)
+      );
+    });
+  });
+
+  describe('When an error is thrown', () => {
+    it('it should throw the same error', async () => {
+      const globDefault: jest.Mock<any, any> = (await import('glob'))
+        .default as any;
+
+      globDefault.mockClear();
+      const error = createCodedError('Invalid Access', 'ENOACCESS');
+      globDefault.mockImplementation((_, callback) => {
+        callback(error);
+      });
+
+      const actualPromise = globFiles('./basePath', '*.myfile.*');
+
+      await expect(actualPromise).rejects.toThrowError(error.message);
+      expect(globDefault).toHaveBeenCalledTimes(1);
+      expect(globDefault).toHaveBeenCalledWith(
+        path.join('./basePath', '*.myfile.*'),
+        expect.any(Function)
+      );
+    });
   });
 });

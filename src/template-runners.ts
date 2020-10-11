@@ -9,7 +9,7 @@ import {
 } from './logging';
 import {
   IFileLocator,
-  IPlugginExtensions,
+  IPluginExtensions,
   ITemplateRunnerConfig,
   ITemplateRunners,
 } from './types';
@@ -133,7 +133,7 @@ export function createFallbackTemplateRunners(
 }
 
 export function createTemplateRunners(
-  config: IPlugginExtensions,
+  config: IPluginExtensions,
   fallbackTemplateRunners: ITemplateRunners,
   loadDefaultPlugins: boolean
 ): ITemplateRunners {

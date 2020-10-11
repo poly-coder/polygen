@@ -1,6 +1,6 @@
 import consola from 'consola';
 import path from 'path';
-import { defaultInitOptions, defaultOutputOptions } from './defaults';
+import { getDefaultInitOptions, getDefaultOutputOptions } from './defaults';
 import { fsExistsAsFile, globFiles, joinPaths } from './file-utils';
 import {
   createLogPrefix,
@@ -125,8 +125,8 @@ export function createConfiguration(
   config: IConfigurationFile
 ): IConfiguration {
   const requiredConfig: RequiredInitOptionsOnly & RequiredOutputOptionsOnly = {
-    ...defaultInitOptions,
-    ...defaultOutputOptions,
+    ...getDefaultInitOptions(),
+    ...getDefaultOutputOptions(),
     ...config,
   };
 
@@ -137,7 +137,7 @@ export function createConfiguration(
 
   const fileLocator = createFileLocator(requiredConfig.cwd, requiredConfig.outDir ?? '.')
 
-  const modelLoaders = createModelLoaders(config, variables, createFallbackModelLoader(fileLocator), true);
+  const modelLoaders = createModelLoaders(config, createFallbackModelLoader(fileLocator), true);
 
   const modelValidators = createModelValidators(config, createFallbackModelValidator(fileLocator), true);
 
@@ -274,7 +274,7 @@ export async function loadCommand(
 
   const fileLocator = createFileLocator(generator.configuration.cwd, outDir)
 
-  const modelLoaders = createModelLoaders(commandModel, variables, createFallbackModelLoader(fileLocator), false);
+  const modelLoaders = createModelLoaders(commandModel, createFallbackModelLoader(fileLocator), false);
 
   const modelValidators = createModelValidators(commandModel, createFallbackModelValidator(fileLocator), true);
 
@@ -391,7 +391,7 @@ export async function loadGenerator(
 
   const fileLocator = createFileLocator(configuration.cwd, outDir)
 
-  const modelLoaders = createModelLoaders(modelFile, variables, createFallbackModelLoader(fileLocator), false);
+  const modelLoaders = createModelLoaders(modelFile, createFallbackModelLoader(fileLocator), false);
 
   const modelValidators = createModelValidators(modelFile, createFallbackModelValidator(fileLocator), true);
 

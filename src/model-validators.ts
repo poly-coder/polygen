@@ -11,7 +11,7 @@ import {
   IFileLocator,
   IModelValidatorConfig,
   IModelValidators,
-  IPlugginExtensions,
+  IPluginExtensions,
 } from './types';
 
 export const defaultModelValidators: IModelValidatorConfig[] = [
@@ -80,7 +80,7 @@ export function createFallbackModelValidator(
 }
 
 export function createModelValidators(
-  config: IPlugginExtensions,
+  config: IPluginExtensions,
   fallbackModelValidators: IModelValidators,
   loadDefaultPlugins: boolean
 ): IModelValidators {

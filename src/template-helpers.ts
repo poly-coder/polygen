@@ -5,7 +5,7 @@ import {
   sprintGood,
 } from './logging';
 import {
-  IPlugginExtensions,
+  IPluginExtensions,
   ITemplateHelpersConfig,
   ITemplateHelpers,
 } from './types';
@@ -45,7 +45,7 @@ export function createFallbackTemplateHelpers(): ITemplateHelpers {
 }
 
 export function createTemplateHelpers(
-  config: IPlugginExtensions,
+  config: IPluginExtensions,
   fallbackTemplateHelpers: ITemplateHelpers,
   loadDefaultPlugins: boolean
 ): ITemplateHelpers {

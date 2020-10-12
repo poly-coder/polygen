@@ -4,9 +4,8 @@ import { fsExistsAsFile, fsReadFileContent } from './file-utils';
 import {
   createLogPrefix,
   sprintBad,
-  sprintGood,
-  sprintGoodList,
 } from './logging';
+import { createExtensionBasedPluginRegistry } from './plugins';
 import {
   IFileLocator,
   IModelValidatorConfig,
@@ -37,16 +36,21 @@ export const defaultModelValidators: IModelValidatorConfig[] = [
     name: 'jsonschema',
     extensions: ['.json', '.json5'],
     fromContent: async (content, model, { consola }, validatorOptions) => {
-      const json5 = await import('json5')
+      const json5 = await import('json5');
       const schema = json5.parse(content);
-      const jsonschema = await import('jsonschema')
+      const jsonschema = await import('jsonschema');
       const validator = new jsonschema.Validator();
-      const validation = validator.validate(model, schema, undefined, validatorOptions);
+      const validation = validator.validate(
+        model,
+        schema,
+        undefined,
+        validatorOptions
+      );
 
       if (!validation.valid) {
-        consola.error('Error validating model!')
+        consola.error('Error validating model!');
         for (const error of validation.errors) {
-          consola.log(`${sprintBad(error.property)}: ${error.message}`)
+          consola.log(`${sprintBad(error.property)}: ${error.message}`);
         }
       }
 
@@ -86,54 +90,14 @@ export function createModelValidators(
 ): IModelValidators {
   const logPrefix = createLogPrefix('createModelValidators');
 
-  const byName = new Map<string, IModelValidatorConfig>();
-  const byExtension = new Map<string, IModelValidatorConfig>();
-
-  function addValidator(validator: IModelValidatorConfig, isDefault: boolean) {
-    const extensions = validator.extensions
-      ? sprintGoodList(validator.extensions)
-      : sprintBad('None');
-
-    consola.trace(
-      `${logPrefix}: ${
-        isDefault ? 'Default model' : 'Model'
-      } validator '${sprintGood(validator.name)}' for extensions: ${extensions}`
-    );
-
-    const warnLogger = isDefault ? consola.trace : consola.warn;
-
-    if (byName.has(validator.name)) {
-      warnLogger(
-        `There are multiple model validators with name '${sprintBad(
-          validator.name
-        )}'`
-      );
-    } else {
-      byName.set(validator.name, validator);
-    }
-
-    for (const extension of validator.extensions ?? []) {
-      if (byExtension.has(extension)) {
-        warnLogger(
-          `There are multiple model validators with extension '${sprintBad(
-            extension
-          )}'`
-        );
-      } else {
-        byExtension.set(extension, validator);
-      }
-    }
-  }
-
-  for (const validator of config.validators ?? []) {
-    addValidator(validator, false);
-  }
-
-  for (const validator of loadDefaultPlugins === false
-    ? []
-    : defaultModelValidators) {
-    addValidator(validator, true);
-  }
+  const { byName, byExtension } = createExtensionBasedPluginRegistry<
+    IModelValidatorConfig
+  >(
+    logPrefix,
+    'model validator',
+    config.loaders ?? [],
+    loadDefaultPlugins === false ? [] : defaultModelValidators
+  );
 
   return {
     ...fallbackModelValidators,
@@ -153,7 +117,12 @@ export function createModelValidators(
 
       try {
         if (validator.fromContent) {
-          const text = await validator.fromContent(content, model, context, validatorOptions);
+          const text = await validator.fromContent(
+            content,
+            model,
+            context,
+            validatorOptions
+          );
 
           return text;
         }
@@ -197,7 +166,12 @@ export function createModelValidators(
         }
 
         if (validator.fromPath) {
-          return await validator.fromPath(filePath, model, context, validatorOptions);
+          return await validator.fromPath(
+            filePath,
+            model,
+            context,
+            validatorOptions
+          );
         }
 
         if (validator.fromContent) {
@@ -210,7 +184,12 @@ export function createModelValidators(
             return undefined;
           }
 
-          return await validator.fromContent(content, model, context, validatorOptions);
+          return await validator.fromContent(
+            content,
+            model,
+            context,
+            validatorOptions
+          );
         }
 
         consola.log(

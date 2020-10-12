@@ -178,12 +178,17 @@ export interface IFileLocator {
   readonly atOutDir: (...paths: string[]) => string;
 }
 
+export interface NameBasedPlugin {
+  readonly name: string;
+}
+
+export interface ExtensionBasedPlugin extends NameBasedPlugin {
+  readonly extensions?: string[];
+}
+
 // Model Loaders
 
-export interface IModelLoaderConfig {
-  readonly name: string;
-  readonly extensions?: string[];
-
+export interface IModelLoaderConfig extends ExtensionBasedPlugin {
   readonly fromContent?: (
     content: string,
     context: any
@@ -220,10 +225,7 @@ export interface IModelLoaders extends IFileLocator {
 
 // Model Validators
 
-export interface IModelValidatorConfig {
-  readonly name: string;
-  readonly extensions?: string[];
-
+export interface IModelValidatorConfig extends ExtensionBasedPlugin {
   readonly fromContent?: (
     content: string,
     model: any,
@@ -269,10 +271,7 @@ export interface IModelValidators extends IFileLocator {
 
 // Template Runners
 
-export interface ITemplateRunnerConfig {
-  readonly name: string;
-  readonly extensions?: string[];
-
+export interface ITemplateRunnerConfig extends ExtensionBasedPlugin {
   readonly fromContent?: (
     content: string,
     context: any,
@@ -312,8 +311,7 @@ export interface ITemplateRunners extends IFileLocator {
 
 // Template Helpers
 
-export interface ITemplateHelpersConfig {
-  readonly name: string;
+export interface ITemplateHelpersConfig extends NameBasedPlugin {
   readonly create?: () => any | undefined | Promise<any | undefined>;
   readonly value?: any;
 }

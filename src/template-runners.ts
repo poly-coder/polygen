@@ -4,9 +4,8 @@ import { fsExistsAsFile, fsReadFileContent } from './file-utils';
 import {
   createLogPrefix,
   sprintBad,
-  sprintGood,
-  sprintGoodList,
 } from './logging';
+import { createExtensionBasedPluginRegistry } from './plugins';
 import {
   IFileLocator,
   IPluginExtensions,
@@ -139,53 +138,12 @@ export function createTemplateRunners(
 ): ITemplateRunners {
   const logPrefix = createLogPrefix('createTemplateRunners');
 
-  const byName = new Map<string, ITemplateRunnerConfig>();
-  const byExtension = new Map<string, ITemplateRunnerConfig>();
-
-  function addRunner(runner: ITemplateRunnerConfig, isDefault: boolean) {
-    const extensions = runner.extensions
-      ? sprintGoodList(runner.extensions)
-      : sprintBad('None');
-    consola.trace(
-      `${logPrefix}: ${
-        isDefault ? 'Default template' : 'Template'
-      } runner '${sprintGood(runner.name)}' for extensions: ${extensions}`
-    );
-
-    const warnLogger = isDefault ? consola.trace : consola.warn;
-
-    if (byName.has(runner.name)) {
-      warnLogger(
-        `There are multiple template runners with name '${sprintBad(
-          runner.name
-        )}'`
-      );
-    } else {
-      byName.set(runner.name, runner);
-    }
-
-    for (const extension of runner.extensions ?? []) {
-      if (byExtension.has(extension)) {
-        warnLogger(
-          `There are multiple template runners with extension '${sprintBad(
-            extension
-          )}'`
-        );
-      } else {
-        byExtension.set(extension, runner);
-      }
-    }
-  }
-
-  for (const runner of config.engines ?? []) {
-    addRunner(runner, false);
-  }
-
-  for (const runner of loadDefaultPlugins === false
-    ? []
-    : defaultTemplateRunners) {
-    addRunner(runner, true);
-  }
+  const { byName, byExtension } = createExtensionBasedPluginRegistry<ITemplateRunnerConfig>(
+    logPrefix,
+    'template runner',
+    config.loaders ?? [],
+    loadDefaultPlugins === false ? [] : defaultTemplateRunners,
+  );
 
   return {
     ...fallbackTemplateRunners,

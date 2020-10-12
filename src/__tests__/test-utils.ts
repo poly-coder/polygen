@@ -1,6 +1,10 @@
 /* istanbul ignore file */
 import fs from 'fs-extra';
 
+export const haveStr = expect.stringContaining;
+export const haveRegex = expect.stringMatching;
+
+
 export function createCodedError(message: string, code: string) {
   const error = new Error(message);
   Object.defineProperty(error, 'code', {

@@ -2,8 +2,8 @@ import consola from 'consola';
 import {
   createLogPrefix,
   sprintBad,
-  sprintGood,
 } from './logging';
+import { createExtensionBasedPluginRegistry } from './plugins';
 import {
   IPluginExtensions,
   ITemplateHelpersConfig,
@@ -51,37 +51,14 @@ export function createTemplateHelpers(
 ): ITemplateHelpers {
   const logPrefix = createLogPrefix('createTemplateHelpers');
 
-  const byName = new Map<string, ITemplateHelpersConfig>();
-
-  function addHelper(runner: ITemplateHelpersConfig, isDefault: boolean) {
-    consola.trace(
-      `${logPrefix}: ${isDefault ? 'Default helper' : 'Helper'} '${sprintGood(
-        runner.name
-      )}'`
-    );
-
-    const warnLogger = isDefault ? consola.trace : consola.warn;
-
-    if (byName.has(runner.name)) {
-      warnLogger(
-        `There are multiple template helpers with name '${sprintBad(
-          runner.name
-        )}'`
-      );
-    } else {
-      byName.set(runner.name, runner);
-    }
-  }
-
-  for (const helper of config.helpers ?? []) {
-    addHelper(helper, false);
-  }
-
-  for (const helper of loadDefaultPlugins === false
-    ? []
-    : defaultTemplateHelpers) {
-    addHelper(helper, true);
-  }
+  const { byName } = createExtensionBasedPluginRegistry<
+    ITemplateHelpersConfig
+  >(
+    logPrefix,
+    'template helper',
+    config.loaders ?? [],
+    loadDefaultPlugins === false ? [] : defaultTemplateHelpers
+  );
 
   return {
     createHelpers: async () => {

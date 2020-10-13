@@ -1,6 +1,0 @@
-{
-  "name": "parentModel",
-  "child": {
-    "name": "childModel"
-  }
-}

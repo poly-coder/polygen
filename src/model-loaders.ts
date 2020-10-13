@@ -43,7 +43,7 @@ const defaultModelLoaders: IModelLoaderConfig[] = [
     extensions: ['.yaml', '.yml'],
     fromContent: async (content: string) => {
       const yaml = await import('js-yaml');
-      return yaml.safeLoad(content);
+      return yaml.safeLoad(content) ?? {};
     },
   },
   {
@@ -59,7 +59,7 @@ const defaultModelLoaders: IModelLoaderConfig[] = [
     extensions: ['.toml'],
     fromContent: async (content: string) => {
       const toml = await import('toml');
-      return toml.parse(content);
+      return { ...toml.parse(content) };
     },
   },
   {
@@ -204,7 +204,6 @@ export function createModelLoaders(
 
         if (loader.fromContent) {
           const content = await fsReadFileContent(filePath);
-
           if (content === undefined) {
             errorLogger(
               `Cannot read content of model file '${sprintBad(filePath)}'.`
@@ -217,7 +216,9 @@ export function createModelLoaders(
             return await loader.fromContent(text, context);
           }
 
-          return await loader.fromContent(content, context);
+          const model = await loader.fromContent(content, context);
+
+          return model;
         }
 
         errorLogger(

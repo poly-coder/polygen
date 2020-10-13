@@ -10,7 +10,7 @@ export function newCommand(command: commander.Command) {
     .description('Execute a generator')
     .allowUnknownOption();
 
-  command = addSearchOptions(command, {});
+  command = addSearchOptions(command);
 
   command = addOutputOptions(command, {});
 

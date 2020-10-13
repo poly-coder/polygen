@@ -5,7 +5,7 @@ import { listGenerators } from './execute-list';
 export function listCommand(command: commander.Command) {
   command = command.command('list').alias('ls').description('List existing generators');
 
-  command = addSearchOptions(command, {});
+  command = addSearchOptions(command);
 
   command = addPrintOptions(command, {
     showBasePath: false,

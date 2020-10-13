@@ -18,14 +18,11 @@ import {
   sprintBad,
   sprintBadList,
   sprintGood,
+  sprintGoodList,
   sprintInfo,
   sprintWarn,
 } from './logging';
 import { matchTags, searchGenerators } from './searching';
-import {
-  createFallbackTemplateHelpers,
-  createTemplateHelpers,
-} from './template-helpers';
 import {
   CommandStep,
   CopyCommandStep,
@@ -359,7 +356,7 @@ function executeCopyStep(
     async (context) => {
       const toFile = await getValue1(stepDefinition.to, context);
 
-      if (await shouldSkipStep(stepDefinition, context, toFile)) {
+      if (!(await shouldRunStep(stepDefinition, context, toFile))) {
         return 0;
       }
 
@@ -430,12 +427,12 @@ function searchStepEngine(
   return [engine, engineOptions];
 }
 
-function executeTemplateStep(
+function executeFileStep(
   stepDefinition: TemplateCommandStep,
   parentContext: ICommandContext
 ): Promise<number> {
   return executeStep(
-    'executeCopyStep',
+    'executeFileStep',
     `'${
       typeof stepDefinition.from === 'string' ? stepDefinition.from : '...'
     }' to '${
@@ -455,6 +452,10 @@ function executeTemplateStep(
       const fromFile = await getValue1(stepDefinition.from, context);
 
       const toFile = await getValue1(stepDefinition.to, context);
+
+      if (!(await shouldRunStep(stepDefinition, context, toFile))) {
+        return 0;
+      }
 
       const templatePath = context.generator.atTemplates(fromFile);
 
@@ -576,6 +577,10 @@ function executeSnippetStep(
 
       const toFile = await getValue1(stepDefinition.to, context);
 
+      if (!(await shouldRunStep(stepDefinition, context))) {
+        return 0;
+      }
+
       const targetPath = context.command.atOutDir(toFile);
 
       const targetContent = await context.fileSystem.readFile(targetPath);
@@ -663,18 +668,18 @@ async function createCommandContext(
   return Object.assign(commandContext, { self: commandContext });
 }
 
-async function shouldSkipStep(
+async function shouldRunStep(
   stepDefinition: CommandStep,
   stepContext: IStepContext,
-  toFile: string
+  toFile?: string
 ) {
   if (stepDefinition.skip) {
     consola.trace(
-      `Skipping '${sprintInfo(
-        stepDefinition.type
-      )}' step. It is marked with 'skip:true'`
+      `Skipping '${sprintInfo(stepDefinition.type)} ${sprintGoodList(
+        stepDefinition.stepTags ?? []
+      )}' step. It is marked with 'skip: true'`
     );
-    return true;
+    return false;
   }
 
   if (!matchTags(stepDefinition.stepTags, stepContext.options.stepTag)) {
@@ -685,27 +690,46 @@ async function shouldSkipStep(
         stepDefinition.stepTags ?? []
       )}'`
     );
-    return true;
+    return false;
   }
 
-  if (
-    'to' in stepDefinition &&
-    (stepContext.options.overwrite === false ||
-      (stepDefinition.overwrite &&
-        (await getValue1(stepDefinition.overwrite, stepContext)) === false))
-  ) {
-    const toPath = stepContext.configuration.atOutDir(toFile);
-    if (await stepContext.fileSystem.fileExists(toPath)) {
-      const who = stepContext.options.overwrite === false ? 'User' : 'Step';
-      stepContext.fileSystem.writeMessage(
-        chalk`{cyan ${'Skip'}} generating to file '{white ${toPath}}'. {cyan ${who}} indicated no overwrite.`
-      );
+  if (!!toFile) {
+    const toPath = stepContext.command.atOutDir(toFile);
+
+    const fileExists = await stepContext.fileSystem.fileExists(toPath);
+
+    if (fileExists) {
+      const userOverwrite = stepContext.options.overwrite;
+
+      if (userOverwrite === false) {
+        stepContext.fileSystem.writeMessage(
+          chalk`{cyan ${'Skip'}} generating to file '{white ${toPath}}'. {cyan User} indicated not to overwrite any file.`
+        );
+        return false;
+      }
+
+      const stepOverwrite =
+        stepDefinition.overwrite !== undefined
+          ? await getValue1(stepDefinition.overwrite, stepContext)
+          : undefined;
+
+      if (userOverwrite !== true && stepOverwrite === false) {
+        stepContext.fileSystem.writeMessage(
+          chalk`{cyan ${'Skip'}} generating to file '{white ${toPath}}'. {cyan Step} indicated not to overwrite this file.`
+        );
+        return false;
+      }
+
+      if (stepOverwrite !== true && userOverwrite !== true) {
+        stepContext.fileSystem.writeMessage(
+          chalk`{cyan ${'Skip'}} generating to file '{white ${toPath}}'. By default no files are overwritten.`
+        );
+        return false;
+      }
     }
-
-    return true;
   }
 
-  return false;
+  return true;
 }
 
 async function executeCommand(
@@ -752,7 +776,7 @@ async function executeCommand(
 
       case 'file':
         {
-          const result = await executeTemplateStep(
+          const result = await executeFileStep(
             stepDefinition,
             commandContext
           );
@@ -889,11 +913,7 @@ export async function runGenerator(options: RunOptions) {
 
   const fileSystem = createFileSystem(configuration);
 
-  const helpers = await createTemplateHelpers(
-    config,
-    createFallbackTemplateHelpers(),
-    true
-  );
+  const helpers = await configuration.createHelpers();
 
   const context: IOperationContext = {
     configuration,

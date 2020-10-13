@@ -9,7 +9,7 @@ export function infoCommand(command: commander.Command) {
     .description('Show detailed information of a generator')
     .arguments('[generator]');
 
-  command = addSearchOptions(command, {});
+  command = addSearchOptions(command);
 
   command = addPrintOptions(command, {
     showBasePath: true,

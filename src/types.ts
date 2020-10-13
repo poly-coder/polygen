@@ -365,6 +365,7 @@ export interface ICommandModel extends IPluginExtensions {
   readonly details?: ModelDetails;
   readonly requireName?: boolean;
   readonly requireModel?: boolean;
+  readonly outDir?: string;
   readonly validation?: {
     readonly schemaFile?: string;
     readonly validator?: string;
@@ -460,7 +461,7 @@ export type ValueOrParam1Func<T, P = any> = T | ((p: P) => T | Promise<T>);
 
 export interface ITargetFileCommandStep extends ICommandStepBase {
   readonly to: ValueOrParam1Func<string, IStepContext>;
-  readonly overwrite?: ValueOrParam1Func<boolean, IStepContext>;
+  readonly overwrite?: ValueOrParam1Func<boolean | undefined, IStepContext>;
 }
 
 export interface CopyCommandStep extends ITargetFileCommandStep {

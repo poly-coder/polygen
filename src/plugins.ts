@@ -15,6 +15,11 @@ export function createExtensionBasedPluginRegistry<
   byName: Map<string, TPlugin>;
   byExtension: Map<string, TPlugin>;
 } {
+  const haveAnyPlugin = plugins.length > 0 || defaultPlugins.length > 0;
+  if (haveAnyPlugin) {
+    consola.trace(`${logPrefix}: Loading ${noCase(pluralize(sentenceName))} plugins`)
+  }
+
   const byName = new Map<string, TPlugin>();
   const byExtension = new Map<string, TPlugin>();
 

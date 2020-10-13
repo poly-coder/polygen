@@ -9,3 +9,5 @@ _pcgen/
 .pcgen.config.js
 out/
 output/
+temp/
+models/

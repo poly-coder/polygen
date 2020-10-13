@@ -10,9 +10,18 @@ import {
   sprintLabel,
 } from './logging';
 import { createFallbackModelLoader, createModelLoaders } from './model-loaders';
-import { createFallbackModelValidator, createModelValidators } from './model-validators';
-import { createFallbackTemplateHelpers, createTemplateHelpers } from './template-helpers';
-import { createFallbackTemplateRunners, createTemplateRunners } from './template-runners';
+import {
+  createFallbackModelValidator,
+  createModelValidators,
+} from './model-validators';
+import {
+  createFallbackTemplateHelpers,
+  createTemplateHelpers,
+} from './template-helpers';
+import {
+  createFallbackTemplateRunners,
+  createTemplateRunners,
+} from './template-runners';
 import {
   CommandMode,
   ICommand,
@@ -101,7 +110,6 @@ function createConfigVariables(
 }
 
 function createFileLocator(cwd: string, outDir: string): IFileLocator {
-
   const atCWD = (...paths: string[]): string => {
     return path.normalize(joinPaths(cwd, ...paths));
   };
@@ -110,15 +118,14 @@ function createFileLocator(cwd: string, outDir: string): IFileLocator {
     return path.normalize(joinPaths(process.cwd(), ...paths));
   };
 
-  const atOutDir = (...paths: string[]): string =>
-    atCWD(outDir, ...paths);
+  const atOutDir = (...paths: string[]): string => atCWD(outDir, ...paths);
 
   return {
     outDir,
     atCWD,
     atBasePath,
     atOutDir,
-  }
+  };
 }
 
 export function createConfiguration(
@@ -135,15 +142,36 @@ export function createConfiguration(
     ...createConfigVariables(requiredConfig),
   };
 
-  const fileLocator = createFileLocator(requiredConfig.cwd, requiredConfig.outDir ?? '.')
+  const fileLocator = createFileLocator(
+    requiredConfig.cwd,
+    requiredConfig.outDir ?? '.'
+  );
 
-  const modelLoaders = createModelLoaders(config, createFallbackModelLoader(fileLocator), true);
+  const loadDefaultPlugins = config.loadDefaultPlugins ?? true;
 
-  const modelValidators = createModelValidators(config, createFallbackModelValidator(fileLocator), true);
+  const modelLoaders = createModelLoaders(
+    config,
+    createFallbackModelLoader(fileLocator),
+    loadDefaultPlugins
+  );
 
-  const templateRunners = createTemplateRunners(config, createFallbackTemplateRunners(fileLocator), true);
+  const modelValidators = createModelValidators(
+    config,
+    createFallbackModelValidator(fileLocator),
+    loadDefaultPlugins
+  );
 
-  const templateHelpers = createTemplateHelpers(config, createFallbackTemplateHelpers(), true);
+  const templateRunners = createTemplateRunners(
+    config,
+    createFallbackTemplateRunners(fileLocator),
+    loadDefaultPlugins
+  );
+
+  const templateHelpers = createTemplateHelpers(
+    config,
+    createFallbackTemplateHelpers(),
+    loadDefaultPlugins
+  );
 
   return {
     ...requiredConfig,
@@ -199,9 +227,14 @@ export async function loadGeneratorModelFile(
   name: string,
   basePath: string,
   configuration: IConfiguration,
-  context: any,
+  context: any
 ): Promise<IGeneratorModelFile | undefined> {
-  const fromFile = await loadGeneratorFromFile(name, basePath, configuration, context);
+  const fromFile = await loadGeneratorFromFile(
+    name,
+    basePath,
+    configuration,
+    context
+  );
 
   if (!!fromFile) {
     return fromFile;
@@ -269,18 +302,23 @@ export async function loadCommand(
     COMMAND_NAME: commandModel.name,
   };
 
-  // TODO: Add command outDir option
-  const outDir = generator.outDir;
+  const fileLocator = createFileLocator(
+    generator.atCWD(),
+    generator.atOutDir(commandModel.outDir ?? '.')
+  );
 
-  const fileLocator = createFileLocator(generator.configuration.cwd, outDir)
+  const fallback = {
+    ...generator,
+    ...fileLocator,
+  };
 
-  const modelLoaders = createModelLoaders(commandModel, createFallbackModelLoader(fileLocator), false);
+  const modelLoaders = createModelLoaders(commandModel, fallback, false);
 
-  const modelValidators = createModelValidators(commandModel, createFallbackModelValidator(fileLocator), true);
+  const modelValidators = createModelValidators(commandModel, fallback, false);
 
-  const templateRunners = createTemplateRunners(commandModel, createFallbackTemplateRunners(fileLocator), false);
+  const templateRunners = createTemplateRunners(commandModel, fallback, false);
 
-  const templateHelpers = createTemplateHelpers(commandModel, generator, false);
+  const templateHelpers = createTemplateHelpers(commandModel, fallback, false);
 
   const validateModel = async (model: any, context: ICommandContext) => {
     if (!commandModel.validation?.schemaFile) {
@@ -291,16 +329,17 @@ export async function loadCommand(
       const result = await modelValidators.validateModelFromPath(
         commandModel.validation?.schemaFile,
         model,
-        { 
+        {
           context,
-          validatorName: commandModel.validation?.validator, 
+          validatorName: commandModel.validation?.validator,
           validatorOptions: commandModel.validation?.validatorOptions,
-        })
+        }
+      );
 
       return result ?? true;
     } catch (error) {
-      consola.error(`Error validating model: ${error?.message ?? 'Unknown'}`)
-      consola.trace(error)
+      consola.error(`Error validating model: ${error?.message ?? 'Unknown'}`);
+      consola.trace(error);
       return false;
     }
   };
@@ -365,7 +404,7 @@ export async function loadGenerator(
     generatorName,
     basePath,
     configuration,
-    modelContext,
+    modelContext
   );
 
   // TODO: const isConventionBased = !generatorModelFile
@@ -387,18 +426,24 @@ export async function loadGenerator(
       ? 'folder'
       : 'module';
 
-  const outDir = modelFile.outDir ?? configuration.outDir;
+  const fileLocator = createFileLocator(
+    configuration.atCWD(),
+    configuration.atOutDir(modelFile.outDir ?? '.')
+  );
 
-  const fileLocator = createFileLocator(configuration.cwd, outDir)
+  const fallback = {
+    ...configuration,
+    ...fileLocator,
+  };
 
-  const modelLoaders = createModelLoaders(modelFile, createFallbackModelLoader(fileLocator), false);
+  const modelLoaders = createModelLoaders(modelFile, fallback, false);
 
-  const modelValidators = createModelValidators(modelFile, createFallbackModelValidator(fileLocator), true);
+  const modelValidators = createModelValidators(modelFile, fallback, false);
 
-  const templateRunners = createTemplateRunners(modelFile, createFallbackTemplateRunners(fileLocator), false);
+  const templateRunners = createTemplateRunners(modelFile, fallback, false);
 
-  const templateHelpers = createTemplateHelpers(modelFile, configuration, false);
-    
+  const templateHelpers = createTemplateHelpers(modelFile, fallback, false);
+
   const atGenerator = (...paths: string[]) => joinPaths(basePath, ...paths);
   const atCommands = (...paths: string[]) =>
     atGenerator(configuration.commandsFolder, ...paths);
@@ -498,8 +543,6 @@ export async function loadGenerator(
     atTemplates,
   };
 
-  // consola.log('generator', generator)
-
   return generator;
 }
 
@@ -513,11 +556,10 @@ export async function loadFormattedModel(
 ): Promise<any | undefined> {
   if (typeof model === 'string') {
     const modelPath = path.resolve(modelLoaders.atCWD(model));
-    return await modelLoaders.loadModelFromPath(
-      modelPath,
-      context,
-      { ...loadFromOptions, loaderName: modelFormat }
-    );
+    return await modelLoaders.loadModelFromPath(modelPath, context, {
+      ...loadFromOptions,
+      loaderName: modelFormat,
+    });
   } else {
     return model;
   }

@@ -489,6 +489,103 @@ function executeFileStep(
   );
 }
 
+function isSubstringFoundAt(text: string, substring: string, index: number) {
+  for (let i = 0; i < substring.length; i++) {
+    if (text[index + i] !== substring[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function getDefaultBounds(
+  text: string,
+  fromPos?: number,
+  beforePos?: number
+): [number, number] {
+  return [
+    fromPos === undefined ? 0 : fromPos,
+    beforePos === undefined ? text.length : beforePos,
+  ];
+}
+
+function indexOfSubString(
+  text: string,
+  substring: string,
+  fromPos?: number,
+  beforePos?: number
+) {
+  [fromPos, beforePos] = getDefaultBounds(text, fromPos, beforePos);
+
+  for (let index = fromPos; index < beforePos - substring.length; index++) {
+    if (isSubstringFoundAt(text, substring, index)) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function lastIndexOfSubString(
+  text: string,
+  substring: string,
+  fromPos?: number,
+  beforePos?: number
+) {
+  [fromPos, beforePos] = getDefaultBounds(text, fromPos, beforePos);
+
+  for (
+    let index = beforePos - substring.length - 1;
+    index >= fromPos;
+    index--
+  ) {
+    if (isSubstringFoundAt(text, substring, index)) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function nextSubstringPos(
+  text: string,
+  substrings: string[],
+  fromPos?: number,
+  beforePos?: number
+): [number, string] {
+  let atPos = -1;
+  let found: string = '';
+  for (const substring of substrings) {
+    const pos = indexOfSubString(text, substring, fromPos, beforePos);
+    if (pos >= 0 && (atPos === -1 || pos < atPos)) {
+      atPos = pos;
+      found = substring;
+    }
+  }
+  return [atPos, found];
+}
+
+function lastSubstringPos(
+  text: string,
+  substrings: string[],
+  fromPos?: number,
+  beforePos?: number
+): [number, string] {
+  let atPos = -1;
+  let found: string = '';
+  for (const substring of substrings) {
+    const pos = lastIndexOfSubString(text, substring, fromPos, beforePos);
+    if (
+      pos >= 0 &&
+      (atPos === -1 || pos + substring.length > atPos + found.length)
+    ) {
+      atPos = pos;
+      found = substring;
+    }
+  }
+  return [atPos, found];
+}
+
 const findContainerPosition = (
   container: string,
   searchText: string | undefined,
@@ -509,43 +606,34 @@ const findContainerPosition = (
     index = container.indexOf(searchText);
     length = searchText.length;
   } else {
-    consola.log(`Snippet steps have to specify both start and end boundaries`);
     return undefined;
   }
 
   if (index === -1) {
-    consola.log(`Didn't found the boundaries for snippet insertion`);
     return undefined;
   }
 
   // Look for line start and end
-  while (index + length + 1 < container.length) {
-    if (container[index + length + 1] == '\r') {
-      if (
-        index + length + 2 < container.length &&
-        container[index + length + 2] == '\n'
-      ) {
-        length += 2;
-        break;
-      } else {
-        length += 1;
-        break;
-      }
-    } else if (container[index + length + 1] == '\n') {
-      length += 1;
-      break;
-    } else {
-      length += 1;
-    }
+  const [prevNewLinePos, prevNewLine] = lastSubstringPos(
+    container,
+    ['\r\n', '\r', '\n'],
+    0,
+    index
+  );
+
+  const [nextNewLinePos, nextNewLine] = nextSubstringPos(
+    container,
+    ['\r\n', '\r', '\n'],
+    index + length
+  );
+
+  if (prevNewLinePos >= 0) {
+    length += index - prevNewLinePos - prevNewLine.length;
+    index = prevNewLinePos + prevNewLine.length;
   }
 
-  while (index >= 1) {
-    if (container[index - 1] === '\r' || container[index - 1] === '\n') {
-      break;
-    } else {
-      index -= 1;
-      length += 1;
-    }
+  if (nextNewLinePos >= 0) {
+    length = nextNewLinePos + nextNewLine.length - index;
   }
 
   return [index, length];
@@ -599,13 +687,44 @@ function executeSnippetStep(
         stepDefinition.start,
         stepDefinition.startRegExp
       );
+
+      if (!startPositions) {
+        if (!stepDefinition.start && !stepDefinition.startRegExp) {
+          consola.log(`Snippet steps have to specify both start and end boundaries: from '${
+            stepDefinition.from
+          }' to '${stepDefinition.to}'.`);
+        } else {
+          consola.log(
+            `Didn't found the boundaries for snippet insertion: from '${
+              stepDefinition.from
+            }' to '${stepDefinition.to}'. Start: '${
+              stepDefinition.start ?? stepDefinition.startRegExp
+            }'`
+          );
+        }
+        return -1;
+      }
+
       const endPositions = findContainerPosition(
         targetContent,
-        stepDefinition.start,
-        stepDefinition.startRegExp
+        stepDefinition.end,
+        stepDefinition.endRegExp
       );
 
-      if (!startPositions || !endPositions) {
+      if (!endPositions) {
+        if (!stepDefinition.end && !stepDefinition.endRegExp) {
+          consola.log(`Snippet steps have to specify both end and end boundaries: from '${
+            stepDefinition.from
+          }' to '${stepDefinition.to}'.`);
+        } else {
+          consola.log(
+            `Didn't found the boundaries for snippet insertion: from '${
+              stepDefinition.from
+            }' to '${stepDefinition.to}'. End: '${
+              stepDefinition.end ?? stepDefinition.endRegExp
+            }'`
+          );
+        }
         return -1;
       }
 
@@ -613,7 +732,10 @@ function executeSnippetStep(
       const [endIndex] = endPositions;
 
       if (endIndex < startIndex + startLength) {
-        consola.log(`Found snippet boundaries in the wrong position`);
+        consola.log(
+          `Found snippet boundaries in the wrong position. ` +
+            `endIndex [${endIndex}] < startIndex [${startIndex}] + startLength [${startLength}]`
+        );
         return -1;
       }
 
@@ -750,7 +872,31 @@ async function executeCommand(
     return -1;
   }
 
-  const commandContext = await createCommandContext(command, parentContext);
+  let commandContext = await createCommandContext(command, parentContext);
+
+  const validationResult = await command.validateModel(
+    commandContext.model,
+    commandContext
+  );
+
+  if (
+    validationResult === false ||
+    validationResult === undefined ||
+    validationResult === null
+  ) {
+    consola.error(`Given model did not pass the command's validation.`);
+    return -1;
+  } else if (typeof validationResult === 'string') {
+    if (validationResult !== '') {
+      consola.error(`Invalid model: ` + validationResult);
+      return -1;
+    }
+  } else if (typeof validationResult === 'object') {
+    commandContext = { ...commandContext, model: validationResult };
+  } else {
+    consola.error(`Given model did not pass the command's validation.`);
+    return -1;
+  }
 
   const commandResult = await command.runCommand(commandContext);
 
@@ -776,10 +922,7 @@ async function executeCommand(
 
       case 'file':
         {
-          const result = await executeFileStep(
-            stepDefinition,
-            commandContext
-          );
+          const result = await executeFileStep(stepDefinition, commandContext);
           if (result !== 0) {
             return result;
           }

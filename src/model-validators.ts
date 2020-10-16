@@ -70,7 +70,7 @@ export function createFallbackModelValidator(
           options.validatorName
         )}'`
       );
-      return undefined;
+      return false;
     },
     validateModelFromPath: async (filePath, _model, options) => {
       consola.log(
@@ -78,7 +78,7 @@ export function createFallbackModelValidator(
           options?.validatorName ?? '(unspecified)'
         )}' or extension '${sprintBad(path.extname(filePath))}'`
       );
-      return undefined;
+      return false;
     },
   };
 }
@@ -117,14 +117,12 @@ export function createModelValidators(
 
       try {
         if (validator.fromContent) {
-          const text = await validator.fromContent(
+          return await validator.fromContent(
             content,
             model,
             context,
             validatorOptions
           );
-
-          return text;
         }
 
         consola.log(
@@ -132,13 +130,13 @@ export function createModelValidators(
             validatorName
           )}' cannot load from content. You need to pass the filePath.`
         );
-        return undefined;
+        return false;
       } catch (error) {
         consola.error(
           `Error loading model of type '${sprintBad(validatorName)}'`
         );
         consola.trace(error);
-        return undefined;
+        return false;
       }
     },
 
@@ -162,7 +160,7 @@ export function createModelValidators(
       try {
         if (!(await fsExistsAsFile(filePath))) {
           consola.log(`Model file '${sprintBad(filePath)}' does not exist`);
-          return undefined;
+          return false;
         }
 
         if (validator.fromPath) {
@@ -181,7 +179,7 @@ export function createModelValidators(
             consola.log(
               `Cannot read content of model file '${sprintBad(filePath)}'.`
             );
-            return undefined;
+            return false;
           }
 
           return await validator.fromContent(
@@ -197,13 +195,13 @@ export function createModelValidators(
             validator.name
           )}' does not define any load function.`
         );
-        return undefined;
+        return false;
       } catch (error) {
         consola.error(
           `Error loading model of type '${sprintBad(validator.name)}'`
         );
         consola.trace(error);
-        return undefined;
+        return false;
       }
     },
   };

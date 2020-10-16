@@ -231,14 +231,14 @@ export interface IModelValidatorConfig extends ExtensionBasedPlugin {
     model: any,
     context: any,
     validatorOptions: any
-  ) => Promise<boolean | undefined>;
+  ) => Promise<ValidateModelResult>;
 
   readonly fromPath?: (
     path: string,
     model: any,
     context: any,
     validatorOptions: any
-  ) => Promise<boolean | undefined>;
+  ) => Promise<ValidateModelResult>;
 }
 
 export interface ValidateModelFromOptions {
@@ -251,6 +251,17 @@ export interface ValidateModelFromContentOptions
   readonly validatorName: string;
 }
 
+export type ValidateModelResult = 
+  // true means the model is valid, false that it is not
+  | boolean 
+  // An empty string means the model is valid, otherwise it is the error to print
+  | string 
+  // If an array or an object, it is the new model to use in the command
+  | any 
+  // Undefined or null means the model is invalid, like false
+  | undefined
+  | null;
+
 export interface ValidateModelFromPathOptions extends ValidateModelFromOptions {
   readonly validatorName?: string;
 }
@@ -260,13 +271,13 @@ export interface IModelValidators extends IFileLocator {
     content: string,
     model: any,
     options: ValidateModelFromContentOptions
-  ) => Promise<boolean | undefined>;
+  ) => Promise<ValidateModelResult>;
 
   readonly validateModelFromPath: (
     filePath: string,
     model: any,
     options?: ValidateModelFromPathOptions
-  ) => Promise<boolean | undefined>;
+  ) => Promise<ValidateModelResult>;
 }
 
 // Template Runners
@@ -437,7 +448,7 @@ export interface ICommand
   readonly validateModel: (
     model: any,
     context: ICommandContext
-  ) => Promise<boolean>;
+  ) => Promise<ValidateModelResult>;
   
   readonly runCommand: (
     context: ICommandContext

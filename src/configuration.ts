@@ -326,8 +326,9 @@ export async function loadCommand(
     }
 
     try {
+      const schemaPath = path.resolve(generator.atCommands(commandModel.validation.schemaFile));
       const result = await modelValidators.validateModelFromPath(
-        commandModel.validation?.schemaFile,
+        schemaPath,
         model,
         {
           context,
@@ -336,7 +337,7 @@ export async function loadCommand(
         }
       );
 
-      return result ?? true;
+      return result;
     } catch (error) {
       consola.error(`Error validating model: ${error?.message ?? 'Unknown'}`);
       consola.trace(error);

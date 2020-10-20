@@ -26,6 +26,7 @@ import { matchTags, searchGenerators } from './searching';
 import {
   CommandStep,
   CopyCommandStep,
+  GeneratorCommandStep,
   ICommand,
   ICommandContext,
   ICommandStep,
@@ -35,7 +36,6 @@ import {
   IGeneratorFileSystem,
   IOperationContext,
   IStepContext,
-  RequiredRunOptions,
   RunOptions,
   SnippetCommandStep,
   TemplateCommandStep,
@@ -690,9 +690,9 @@ function executeSnippetStep(
 
       if (!startPositions) {
         if (!stepDefinition.start && !stepDefinition.startRegExp) {
-          consola.log(`Snippet steps have to specify both start and end boundaries: from '${
-            stepDefinition.from
-          }' to '${stepDefinition.to}'.`);
+          consola.log(
+            `Snippet steps have to specify both start and end boundaries: from '${stepDefinition.from}' to '${stepDefinition.to}'.`
+          );
         } else {
           consola.log(
             `Didn't found the boundaries for snippet insertion: from '${
@@ -713,9 +713,9 @@ function executeSnippetStep(
 
       if (!endPositions) {
         if (!stepDefinition.end && !stepDefinition.endRegExp) {
-          consola.log(`Snippet steps have to specify both end and end boundaries: from '${
-            stepDefinition.from
-          }' to '${stepDefinition.to}'.`);
+          consola.log(
+            `Snippet steps have to specify both end and end boundaries: from '${stepDefinition.from}' to '${stepDefinition.to}'.`
+          );
         } else {
           consola.log(
             `Didn't found the boundaries for snippet insertion: from '${
@@ -769,6 +769,107 @@ function executeSnippetStep(
       );
 
       return 0;
+    }
+  );
+}
+
+function firstDefined<T>(defaultValue: T, ...args: (T | undefined)[]): T {
+  for (const value of args) {
+    if (value !== undefined) {
+      return value;
+    }
+  }
+  return defaultValue;
+}
+
+function firstTrue(
+  defaultValue: boolean,
+  ...args: (boolean | undefined)[]
+): boolean {
+  for (const value of args) {
+    if (value === true) {
+      return true;
+    }
+  }
+  return defaultValue;
+}
+
+function firstFalse(
+  defaultValue: boolean,
+  ...args: (boolean | undefined)[]
+): boolean {
+  for (const value of args) {
+    if (value === false) {
+      return false;
+    }
+  }
+  return defaultValue;
+}
+
+function executeGeneratorStep(
+  stepDefinition: GeneratorCommandStep,
+  parentContext: ICommandContext
+): Promise<number> {
+  const generator =
+    stepDefinition.generator ?? parentContext.generator.generatorName;
+  const command = stepDefinition.command ?? parentContext.command.name;
+
+  return executeStep(
+    'executeGeneratorStep',
+    `${generator}:${command}`,
+    stepDefinition,
+    parentContext,
+    () =>
+      loadModel(
+        parentContext.model,
+        stepDefinition,
+        parentContext.command,
+        parentContext,
+        { isOptional: false, replaceVariables: false }
+      ),
+    async (context) => {
+      if (!(await shouldRunStep(stepDefinition, context))) {
+        return 0;
+      }
+
+      const runOptions = requiredRunOptions({
+        dryRun: firstTrue(false, context.options.dryRun, stepDefinition.dryRun),
+        logLevel: firstDefined(
+          context.options.logLevel,
+          stepDefinition.logLevel
+        ),
+        showOptions: false,
+        version: context.options.version,
+        command,
+        generator,
+        configFile: firstDefined(
+          undefined,
+          stepDefinition.configFile,
+          context.options.configFile
+        ),
+        jsonPath: stepDefinition.jsonPath,
+        model: firstDefined(undefined, stepDefinition.model, context.model),
+        modelFormat: stepDefinition.modelFormat,
+        name: firstDefined(undefined, stepDefinition.name, context.name),
+        outDir: firstDefined('.', stepDefinition.outDir, context.command.outDir),
+        overwrite: firstFalse(
+          true,
+          context.options.overwrite,
+          stepDefinition.dryRun
+        ),
+        stdout: firstTrue(
+          false,
+          stepDefinition.stdout,
+          context.options.overwrite
+        ),
+        stepTag: stepDefinition.stepTag,
+        tag: stepDefinition.tag,
+      });
+
+      return await findAndExecuteGenerator({
+        ...context,
+        options: runOptions,
+      });
     }
   );
 }
@@ -886,6 +987,8 @@ async function executeCommand(
   ) {
     consola.error(`Given model did not pass the command's validation.`);
     return -1;
+  } else if (validationResult === true) {
+    // Do nothing
   } else if (typeof validationResult === 'string') {
     if (validationResult !== '') {
       consola.error(`Invalid model: ` + validationResult);
@@ -941,10 +1044,22 @@ async function executeCommand(
         }
         break;
 
+      case 'generator':
+        {
+          const result = await executeGeneratorStep(
+            stepDefinition,
+            commandContext
+          );
+          if (result !== 0) {
+            return result;
+          }
+        }
+        break;
+
       default:
         consola.log(
           `Unknown step type '${sprintBad(
-            stepDefinition.type
+            (stepDefinition as any).type
           )}' found while executing '${sprintGood(
             `${commandContext.generator.generatorName}:${commandContext.command.name}`
           )}'`
@@ -1001,7 +1116,6 @@ async function executeGenerator(
 }
 
 async function executeRunGenerator(
-  runOptions: RequiredRunOptions,
   generator: IGenerator,
   context: IOperationContext
 ): Promise<number> {
@@ -1009,10 +1123,16 @@ async function executeRunGenerator(
 
   consola.trace(`${logPrefix}: [Start] '${generator.generatorName}'`);
 
-  const model = await loadModel(undefined, runOptions, generator, context, {
-    isOptional: false,
-    replaceVariables: false,
-  });
+  const model = await loadModel(
+    undefined,
+    context.options,
+    generator,
+    context,
+    {
+      isOptional: false,
+      replaceVariables: false,
+    }
+  );
 
   const rootContext: IOperationContext = {
     ...context,
@@ -1026,6 +1146,28 @@ async function executeRunGenerator(
   }
 
   return 0;
+}
+
+async function findAndExecuteGenerator(
+  context: IOperationContext
+): Promise<number> {
+  const generators = await searchGenerators(
+    context.configuration,
+    context.options
+  );
+
+  if (generators.length === 0) {
+    consola.log(`There are no generators to show with given criteria.`);
+    return -1;
+  }
+
+  if (generators.length > 1) {
+    consola.log(`{yellow There are multiple generators with given criteria}`);
+  }
+
+  const result = await executeRunGenerator(generators[0], context);
+
+  return result;
 }
 
 export async function runGenerator(options: RunOptions) {
@@ -1068,18 +1210,7 @@ export async function runGenerator(options: RunOptions) {
     console: consola,
   };
 
-  const generators = await searchGenerators(configuration, runOptions);
-
-  if (generators.length === 0) {
-    consola.log(`There are no generators to show with given criteria.`);
-    return;
-  }
-
-  if (generators.length > 1) {
-    consola.log(`{yellow There are multiple generators with given criteria}`);
-  }
-
-  const result = await executeRunGenerator(runOptions, generators[0], context);
+  const result = await findAndExecuteGenerator(context);
 
   if (result !== 0) {
     return;

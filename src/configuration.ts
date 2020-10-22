@@ -36,6 +36,7 @@ import {
   IModelLoaders,
   LoadModelFromOptions,
   LoadModelOptions,
+  OutputOptionsOnly,
   RequiredGlobalOptionsOnly,
   RequiredInitOptionsOnly,
   RequiredOutputOptionsOnly,
@@ -129,13 +130,18 @@ function createFileLocator(cwd: string, outDir: string): IFileLocator {
 }
 
 export function createConfiguration(
-  config: IConfigurationFile
+  config: IConfigurationFile,
+  outputOptions: OutputOptionsOnly,
 ): IConfiguration {
   const requiredConfig: RequiredInitOptionsOnly & RequiredOutputOptionsOnly = {
     ...getDefaultInitOptions(),
     ...getDefaultOutputOptions(),
     ...config,
   };
+
+  if (outputOptions.outDir) {
+    Object.assign(requiredConfig, { outDir: outputOptions.outDir });
+  }
 
   const variables: Variables = {
     ...process.env,

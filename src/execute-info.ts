@@ -56,7 +56,7 @@ export async function showGeneratorInfo(options: InfoOptions) {
     return;
   }
 
-  const configuration = createConfiguration(config);
+  const configuration = createConfiguration(config, {});
 
   await executeShowGeneratorInfo(infoOptions, configuration);
 }

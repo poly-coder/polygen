@@ -1194,7 +1194,7 @@ export async function runGenerator(options: RunOptions) {
     return;
   }
 
-  const configuration = createConfiguration(config);
+  const configuration = createConfiguration(config, options);
 
   const fileSystem = createFileSystem(configuration);
 

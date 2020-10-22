@@ -50,7 +50,7 @@ export async function listGenerators(options: ListOptions) {
     return;
   }
 
-  const configuration = createConfiguration(config);
+  const configuration = createConfiguration(config, {});
 
   await executeListGenerators(listOptions, configuration);
 }
